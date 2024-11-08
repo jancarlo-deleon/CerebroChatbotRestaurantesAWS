@@ -10,6 +10,6 @@ const OPENAI_API_URL = process.env.OPENAI_API_URL;
 
 export const handler = async (event) => {
 
-
+    
 
 }
