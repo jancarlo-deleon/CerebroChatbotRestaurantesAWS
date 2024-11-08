@@ -1,0 +1,5 @@
+# Ignorar archivos de variables de entorno 
+.env 
+# Otras reglas para ignorar 
+node_modules/ 
+dist/
