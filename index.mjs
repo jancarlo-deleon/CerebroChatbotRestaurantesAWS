@@ -10,13 +10,153 @@ const OPENAI_API_URL = process.env.OPENAI_API_URL;
 
 export const handler = async (event) => {
 
+    console.log("Evento recibido:", JSON.stringify(event, null, 2));
 
+    let sessionAttributes = event.sessionState.sessionAttributes || {};
+    console.log("Atributos de sesión actuales:", JSON.stringify(sessionAttributes, null, 2));
+
+    let userInput = event.inputTranscript.toLowerCase();
+    console.log("Input obtenido de la conversación: ", userInput);
+
+    console.log("Intent recibido:", event.sessionState.intent.name);
+
+    const chatGPTResponse = await interpretarIntent(userInput);
+
+     // Extraer el JSON de la respuesta de ChatGPT
+    const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+        throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT relacionada con la interpretacion de intención");
+    }
+
+    const intentInfo = JSON.parse(jsonMatch[0]);
+    console.log("El contenido de la intrepretación del input para manejar el intent es: ", intentInfo);
+
+    //return handleCustomFallback(event, sessionAttributes,intentInfo);
 
 }
 
 
-
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
+async function interpretarIntent(userInput){
+    const systemPrompt = `Eres un asistente altamente especializado en la interpretación de intenciones para un chatbot de restaurante. 
+    Tu única función es categorizar precisamente las intenciones del usuario en categorías predefinidas.
+
+    CATEGORÍAS PERMITIDAS Y SUS DEFINICIONES ESPECÍFICAS:
+
+    1. Saludo
+       - INCLUYE: Saludos iniciales, presentaciones
+       - EJEMPLOS: "hola", "buenos días", "qué tal"
+       
+    2. Ordenar
+       - INCLUYE: Intención clara de hacer un pedido nuevo
+       - EJEMPLOS: "quiero ordenar", "deseo hacer un pedido", "quisiera pedir", "me puedes tomar el pedido"
+       
+    3. Agregar a Orden
+       - INCLUYE: Añadir items a un pedido existente
+       - EJEMPLOS: "también quiero agregar", "suma a mi pedido", "agrega una porción más", "añadir a mi orden/pedido"
+       
+    4. Cancelar Orden
+       - INCLUYE: Solicitudes explícitas de cancelación
+       - EJEMPLOS: "cancela mi pedido", "ya no quiero la orden", "anula mi pedido"
+       
+    5. Consulta de Menu
+       - INCLUYE: Preguntas sobre el menú completo
+       - EJEMPLOS: "muéstrame el menú", "qué tienen?", "cuál es su carta"
+       - NO INCLUYE: Preguntas sobre recomendaciones o items específicos
+       
+    6. Consulta de Precios
+       - INCLUYE: Preguntas específicas sobre costos
+       - EJEMPLOS: "cuánto cuesta", "precio de", "valor del"
+       
+    7. Consulta de elementos individuales del Menu
+       - INCLUYE: Preguntas sobre platos específicos
+       - EJEMPLOS: "qué lleva la hamburguesa", "cómo es el combo 1"
+       
+    8. Agradecimiento
+       - INCLUYE: Expresiones de gratitud
+       - EJEMPLOS: "gracias", "muchas gracias", "te lo agradezco"
+       
+    9. Metodos de Pago
+       - INCLUYE: Preguntas sobre formas de pago
+       - EJEMPLOS: "aceptan tarjeta", "puedo pagar con", "qué métodos de pago tienen"
+       
+    10. Metodos de Envío
+        - INCLUYE: Consultas sobre delivery o recojo
+        - EJEMPLOS: "hacen delivery", "puedo recoger", "cómo me lo envían"
+
+    REGLAS CRÍTICAS DE CATEGORIZACIÓN:
+
+    1. De momento, NO categorizar preguntas sobre recomendaciones o sugerencias en ninguna categoría existente.
+    2. NO intentar interpretar intenciones que no coincidan exactamente con las categorías definidas.
+    3. Cualquier consulta ambigua o que no encaje perfectamente en una categoría debe ser marcada como inválida.
+    4. Las preguntas sobre promociones, ofertas o recomendaciones NO deben categorizarse como consultas de menú.
+    5. Solo categorizar como "Ordenar" cuando hay una intención EXPLÍCITA de realizar un pedido.
+    6. Ante la duda, preferir marcar como categoría inválida que forzar una categorización incorrecta.
+
+    IMPORTANTE: Si el input no coincide EXACTAMENTE con alguna de estas categorías o existe alguna ambigüedad, 
+    debes marcarlo como categoría inválida. Es mejor rechazar una categorización dudosa que asignarla incorrectamente.`;
+
+    const userPrompt = `Analiza el siguiente input y categorízalo según las reglas estrictas definidas:
+    "${userInput}"
+    
+    Debes responder únicamente con uno de estos dos formatos JSON:
+
+    Para categorías válidas:
+    {
+        "categoria": "[Categoría exacta de la lista]",
+        "handle": "[Handle correspondiente según esta lista:]"
+        - Saludo -> handleBienvenidaIntent
+        - Ordenar -> handleOrdenarIntent
+        - Agregar a Orden -> handleAgregarAOrdenarIntent
+        - Cancelar Orden -> handleCancelarOrdenIntent
+        - Consulta de Menu -> handleConsultarMenuIntent
+        - Consulta de Precios -> handleConsultaPreciosMenuIntent
+        - Consulta de elementos individuales del Menu -> handleConsultaElementosMenuIntent
+        - Agradecimiento -> handleAgradecimientoIntent
+        - Metodos de Pago -> handleMetodosDePagoIntent
+        - Metodos de Envío -> handleMetodosDeEnvioIntent
+    }
+
+    Para categorías inválidas:
+    {
+        "categoriaInvalida": "No pertenece a ninguna categoria",
+        "mensaje": "[Mensaje corto y claro explicando por qué no podemos procesar esta solicitud]"
+    }
+
+    Responde ÚNICAMENTE con el JSON correspondiente, sin texto adicional ni marcadores de código.`;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",  
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
 async function llamadaAChatGPTParaOrdenar(userInput) {
 
     const systemPrompt = `Eres un asistente especializado en tomar órdenes para una pizzería que maneja un menú específico con solo 4 productos:
