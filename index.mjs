@@ -124,6 +124,9 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
 
     // Si no se detectan las palabras clave, procedemos con el fallback estándar
     console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
+    let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
+    console.log("Contenido de fallbackMessage generadp desde OpenAI: ",fallbackMessage);
+
     return {
         sessionState: {
             dialogAction: {
@@ -138,7 +141,7 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
         messages: [
             {
                 contentType: "PlainText",
-                content: "Mensaje Fallback codificado desde handlerIntents"
+                content: fallbackMessage.mensaje
             }
         ]
     };
@@ -260,6 +263,64 @@ async function interpretarIntent(userInput){
         console.log(response.data.choices[0].message.content);
         console.log("--------------------------------------");
         return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
+async function generarMensajeFallback(userInput,intentInfo) {
+    const systemPrompt = `
+    Eres un asistente de chatbot para un restaurante. Tu tarea es generar un mensaje amigable y apropiado cuando un usuario solicita algo que no está dentro de las capacidades o servicios del restaurante.
+
+    El mensaje debe ser corto, claro y educado, explicando de manera sencilla que la solicitud no puede ser procesada, pero ofreciendo una alternativa o sugerencia cuando sea posible.
+
+    Formato de respuesta:
+    {
+        "mensaje": "Aquí va el mensaje de fallback generado por usted"
+    }
+    `;
+
+    let userPrompt;
+    if (intentInfo.categoriaInvalida) {
+        userPrompt = `
+        El usuario ha hecho la siguiente solicitud que no pertenece a ninguna categoría válida:
+        "${userInput}"
+
+        Por favor, genera un mensaje de fallback apropiado que explique de manera amigable por qué no podemos procesar esta solicitud, y si es posible, ofrece una alternativa o sugerencia.
+        `;
+    } else {
+        userPrompt = `
+        Hubo un error al procesar la intención del usuario. Genera un mensaje de fallback apropiado.
+        `;
+    }
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",  
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.5
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para mensaje de fallback:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return JSON.parse(response.data.choices[0].message.content);
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT:", error);
         throw error;
