@@ -18,7 +18,23 @@ export const handler = async (event) => {
     let userInput = event.inputTranscript.toLowerCase();
     console.log("Input obtenido de la conversación: ", userInput);
 
-    console.log("Intent recibido:", event.sessionState.intent.name);
+    let intentName = event.sessionState.intent.name;
+    console.log("Intent recibido:",intentName );
+
+    if (intentName == 'InicioIntent') {
+        console.log("Se esta activando esta parte por medio de InicioIntent");
+
+        const chatGPTResponse = await interpretarIntent(userInput);
+
+         // Extraer el JSON de la respuesta de ChatGPT
+        const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT relacionada con la interpretacion de intención");
+        }
+
+        const intentInfo = JSON.parse(jsonMatch[0]);
+        console.log("El contenido de la intrepretación del input para manejar el intent es: ", intentInfo);
+    }
 
     const chatGPTResponse = await interpretarIntent(userInput);
 
