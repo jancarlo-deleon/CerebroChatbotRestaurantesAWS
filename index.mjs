@@ -147,6 +147,48 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
     };
 }
 
+//Funciones para las intenciones
+
+async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleAgregarAOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleCancelarOrdenIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleConsultarMenuIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleConsultaPreciosMenuIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleConsultaElementosMenuIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
+async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,userInput){
+
+}
+
 
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
 async function interpretarIntent(userInput){
