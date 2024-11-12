@@ -158,9 +158,14 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
         const mensajeBienvenida = await generarMensajeBienvenida(userInput);
         console.log("Mensaje de bienvenida generado:", mensajeBienvenida);
 
+        /** 
         const consultaInicio = await getInicio();
         console.log("informacion obtenida de la hoja INICIO a traves de shee.best: ", consultaInicio);
 
+        const consultaMenu = await getMenu();
+        console.log("informacion obtenida de la hoja MENU a traves de shee.best: ", consultaMenu);
+        */
+       
         return {
             sessionState: {
                 dialogAction: {
@@ -427,9 +432,9 @@ export async function getMenu() {
         const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/MENU`);
         console.log("Respuesta completa de la hoja 'MENU':", response.data);
 
-        // Filtrar para obtener solo filas a partir de A4
-        const menu = response.data.filter((fila, index) => index >= 3);
-        console.log("Datos del menú a partir de la fila A4:", menu);
+        //Obtener datos 
+        const menu = response.data;
+        console.log("Datos del menú a partir de la fila A2:", menu);
 
         return menu;
     } catch (error) {
