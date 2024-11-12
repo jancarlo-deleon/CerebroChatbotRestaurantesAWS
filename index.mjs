@@ -7,6 +7,7 @@ dotenv.config();
 //Constantes
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY; 
 const OPENAI_API_URL = process.env.OPENAI_API_URL;
+const SHEET_BEST_API_URL = process.env.SHEET_BEST_API_URL;
 
 export const handler = async (event) => {
 
@@ -148,7 +149,6 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
 }
 
 //Funciones para las intenciones
-
 async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInput){
 
     console.log("Preparando respuesta para bienvenida");
@@ -157,6 +157,9 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
         // Obtener el mensaje de bienvenida
         const mensajeBienvenida = await generarMensajeBienvenida(userInput);
         console.log("Mensaje de bienvenida generado:", mensajeBienvenida);
+
+        const consultaInicio = await getInicio();
+        console.log("informacion obtenida de la hoja INICIO a traves de shee.best: ", consultaInicio);
 
         return {
             sessionState: {
@@ -204,25 +207,32 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
 
 async function handleOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
 
+    console.log("Preparando respuesta para ordenar");
+
 }
 
 async function handleAgregarAOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log("Preparando respuesta para agregar a la orden");
 
 }
 
 async function handleCancelarOrdenIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log("Preparando respuesta para cancelar orden");
 
 }
 
 async function handleConsultarMenuIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log("Preparando respuesta para bienvenida");
 
 }
 
 async function handleConsultaPreciosMenuIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log("Preparando respuesta para consultar precios del menu");
 
 }
 
 async function handleConsultaElementosMenuIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log("Preparando respuesta para consultar por elementos del menu");
 
 }
 
@@ -383,6 +393,77 @@ async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,use
         };
     }
 
+}
+
+//Metodos para usar sheet.best
+async function getInicio() {
+    try {
+        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/INICIO`);
+        console.log("Datos crudos de la hoja INICIO:", response.data);
+
+        // Encuentra la primera fila que tiene algún valor y extrae su clave y valor
+        const filaValida = response.data.find(fila => {
+            const claves = Object.keys(fila);
+            return claves.length > 0 && fila[claves[0]] !== null;
+        });
+
+        // Si se encuentra una fila válida, se asignan clave y valor
+        const resultado = filaValida
+            ? { nombre: Object.keys(filaValida)[0], descripcion: filaValida[Object.keys(filaValida)[0]].trim() }
+            : { nombre: '', descripcion: '' };
+
+        console.log("Información obtenida de la hoja INICIO:", resultado);
+        return resultado;
+    } catch (error) {
+        console.error("Error al obtener la información de inicio desde Sheet.best:", error);
+        throw error;
+    }
+}
+
+export async function getMenu() {
+    console.log("Iniciando consulta a la hoja 'MENU'");
+
+    try {
+        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/MENU`);
+        console.log("Respuesta completa de la hoja 'MENU':", response.data);
+
+        // Filtrar para obtener solo filas a partir de A4
+        const menu = response.data.filter((fila, index) => index >= 3);
+        console.log("Datos del menú a partir de la fila A4:", menu);
+
+        return menu;
+    } catch (error) {
+        console.error("Error al obtener datos de la hoja 'MENU':", error);
+        throw error;
+    }
+}
+
+export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elementos, direccion, metodoPago, estado, observaciones) {
+    console.log("Iniciando registro de nueva orden en la hoja 'ORDENES'");
+
+    const nuevaOrden = {
+        "No. Orden": noOrden,
+        "Fecha y Hora": fechaHora,
+        "Cliente": cliente,
+        "Numero de Telefono": telefono,
+        "Elementos Ordenados": elementos,
+        "Direccion": direccion,
+        "Metodo de Pago": metodoPago,
+        "Estado": estado,
+        "Observaciones": observaciones
+    };
+
+    console.log("Datos de la nueva orden a registrar:", nuevaOrden);
+
+    try {
+        const response = await axios.post(`${SHEET_BEST_API_URL}/tabs/ORDENES`, nuevaOrden);
+        console.log("Respuesta de registro en la hoja 'ORDENES':", response.data);
+
+        return response.data;
+    } catch (error) {
+        console.error("Error al registrar la nueva orden en la hoja 'ORDENES':", error);
+        throw error;
+    }
 }
 
 
@@ -586,6 +667,10 @@ async function generarMensajeBienvenida(userInput) {
     2. Mencione que puedes ayudar con pedidos
     3. Invite al cliente a preguntar sobre el menú
     La respuesta debe ser concisa pero amigable.
+
+    NO USES EMOJIS.
+
+    Y trata de que no siempre se genere el mismo mensaje de saludo, sino que sea variado.
     `;
 
     try {
@@ -638,6 +723,14 @@ async function generarMensajeAgradecimiento(userInput) {
 
     Por favor, genera una respuesta amable y cordial que transmita que estamos contentos de poder ayudar.
     La respuesta debe ser breve y natural.
+
+    NO digas hola cada vez que generes el mensaje.
+
+    NO USES EMOJIS.
+
+    Y trata de que no siempre se genere el mismo mensaje, sino que sea variado.
+
+
     `;
 
     try {
@@ -690,6 +783,12 @@ async function generarMensajeMetodosDePago(userInput) {
 
     Genera una respuesta amable que explique claramente que aceptamos únicamente tarjeta y efectivo.
     La respuesta debe ser breve y directa.
+
+    NO digas hola cada vez que generes el mensaje.
+
+    NO USES EMOJIS.
+
+    Y trata de que no siempre se genere el mismo mensaje, sino que sea variado.
     `;
 
     try {
@@ -742,6 +841,12 @@ async function generarMensajeMetodosDeEnvio(userInput) {
 
     Genera una respuesta amable que explique las dos opciones disponibles: entrega a domicilio en la ciudad y recoger en el establecimiento.
     La respuesta debe ser clara y concisa.
+
+    NO digas hola cada vez que generes el mensaje.
+
+    NO USES EMOJIS.
+
+    Y trata de que no siempre se genere el mismo mensaje, sino que sea variado.
     `;
 
     try {
