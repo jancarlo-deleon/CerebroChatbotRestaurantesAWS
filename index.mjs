@@ -125,7 +125,7 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
     // Si no se detectan las palabras clave, procedemos con el fallback estándar
     console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
     let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
-    console.log("Contenido de fallbackMessage generadp desde OpenAI: ",fallbackMessage);
+    console.log("Contenido de fallbackMessage generado desde OpenAI: ",fallbackMessage);
 
     return {
         sessionState: {
@@ -150,6 +150,55 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
 //Funciones para las intenciones
 
 async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInput){
+
+    console.log("Preparando respuesta para bienvenida");
+    
+    try {
+        // Obtener el mensaje de bienvenida
+        const mensajeBienvenida = await generarMensajeBienvenida(userInput);
+        console.log("Mensaje de bienvenida generado:", mensajeBienvenida);
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: mensajeBienvenida.mensaje
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error en handleBienvenidaIntent:", error);
+        
+        // En caso de error, devolver un mensaje de error genérico
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, ha ocurrido un error al procesar [BienvenidaIntent]"
+                }
+            ]
+        };
+    }
 
 }
 
@@ -179,13 +228,160 @@ async function handleConsultaElementosMenuIntent(event,sessionAttributes,intentI
 
 async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,userInput){
 
+    console.log("Preparando respuesta para agradecimiento");
+    
+    try {
+        // Obtener el mensaje de agradecimiento
+        const mensajeAgradecimiento = await generarMensajeAgradecimiento(userInput);
+        console.log("Mensaje de agradecimiento generado:", mensajeAgradecimiento);
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: mensajeAgradecimiento.mensaje
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error en handleAgradecimientoIntent:", error);
+        
+        // En caso de error, devolver un mensaje de error genérico
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, ha ocurrido un error al procesar [AgradecimientoIntent]"
+                }
+            ]
+        };
+    }
+
 }
 
 async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,userInput){
 
+    console.log("Preparando respuesta para metodos de pago");
+    
+    try {
+        // Obtener el mensaje de metodos de pago
+        const mensajeMetodosDePago = await generarMensajeMetodosDePago(userInput);
+        console.log("Mensaje de metodos de pago generado:", mensajeMetodosDePago);
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: mensajeMetodosDePago.mensaje
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error en handleMetodosDePagoIntent:", error);
+        
+        // En caso de error, devolver un mensaje de error genérico
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, ha ocurrido un error al procesar [MetodosDePagoIntent]"
+                }
+            ]
+        };
+    }
+
 }
 
 async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,userInput){
+
+    console.log("Preparando respuesta para metodos de envio");
+    
+    try {
+        // Obtener el mensaje de metodos de envio
+        const mensajeMetodosDeEnvio = await generarMensajeMetodosDeEnvio(userInput);
+        console.log("Mensaje de metodos de pago generado:", mensajeMetodosDeEnvio);
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: mensajeMetodosDeEnvio.mensaje
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error en handleMetodosDeEnvioIntent:", error);
+        
+        // En caso de error, devolver un mensaje de error genérico
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, ha ocurrido un error al procesar [MetodosDeEnvioIntent]"
+                }
+            ]
+        };
+    }
 
 }
 
@@ -359,6 +555,217 @@ async function generarMensajeFallback(userInput,intentInfo) {
         });
 
         console.log("Respuesta de ChatGPT para mensaje de fallback:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
+async function generarMensajeBienvenida(userInput) {
+    const systemPrompt = `
+    Eres un chatbot amigable para un restaurante. Tu tarea es generar mensajes de bienvenida cálidos y acogedores.
+    Debes mencionar que puedes ayudar a tomar pedidos y responder preguntas sobre el menú.
+    Las respuestas deben ser breves pero acogedoras.
+
+    Formato de respuesta:
+    {
+        "mensaje": "Aquí va el mensaje de bienvenida"
+    }
+    `;
+
+    const userPrompt = `
+    El cliente ha iniciado una conversación o ha saludado con el siguiente mensaje:
+    "${userInput}"
+
+    Genera un mensaje de bienvenida que:
+    1. Salude de manera cálida
+    2. Mencione que puedes ayudar con pedidos
+    3. Invite al cliente a preguntar sobre el menú
+    La respuesta debe ser concisa pero amigable.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.6
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para mensaje de bienvenida:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
+
+async function generarMensajeAgradecimiento(userInput) {
+    const systemPrompt = `
+    Eres un chatbot amable para un restaurante. Tu tarea es generar respuestas variadas y amigables a los agradecimientos de los clientes.
+    Las respuestas deben ser breves, cordiales y mantener un tono positivo.
+
+    Formato de respuesta:
+    {
+        "mensaje": "Aquí va tu respuesta al agradecimiento"
+    }
+    `;
+
+    const userPrompt = `
+    El cliente ha expresado agradecimiento con el siguiente mensaje:
+    "${userInput}"
+
+    Por favor, genera una respuesta amable y cordial que transmita que estamos contentos de poder ayudar.
+    La respuesta debe ser breve y natural.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.7 
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para agradecimiento:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
+async function generarMensajeMetodosDePago(userInput) {
+    const systemPrompt = `
+    Eres un chatbot de restaurante que informa sobre métodos de pago aceptados.
+    Solo debes mencionar dos opciones: tarjeta y efectivo.
+    Las respuestas deben ser concisas y claras.
+
+    Formato de respuesta:
+    {
+        "mensaje": "Aquí va la información sobre métodos de pago"
+    }
+    `;
+
+    const userPrompt = `
+    El cliente ha preguntado sobre métodos de pago con el siguiente mensaje:
+    "${userInput}"
+
+    Genera una respuesta amable que explique claramente que aceptamos únicamente tarjeta y efectivo.
+    La respuesta debe ser breve y directa.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.5
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para métodos de pago:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
+async function generarMensajeMetodosDeEnvio(userInput) {
+    const systemPrompt = `
+    Eres un chatbot de restaurante que informa sobre las opciones de entrega disponibles.
+    Solo debes mencionar dos opciones: entrega a domicilio en la ciudad y recoger en el establecimiento.
+    Las respuestas deben ser informativas y amables.
+
+    Formato de respuesta:
+    {
+        "mensaje": "Aquí va la información sobre métodos de envío"
+    }
+    `;
+
+    const userPrompt = `
+    El cliente ha preguntado sobre las opciones de entrega con el siguiente mensaje:
+    "${userInput}"
+
+    Genera una respuesta amable que explique las dos opciones disponibles: entrega a domicilio en la ciudad y recoger en el establecimiento.
+    La respuesta debe ser clara y concisa.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.5
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para métodos de envío:");
         console.log("--------------------------------------");
         console.log(response.data.choices[0].message.content);
         console.log("--------------------------------------");
