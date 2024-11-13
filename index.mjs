@@ -165,7 +165,7 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
         const consultaMenu = await getMenu();
         console.log("informacion obtenida de la hoja MENU a traves de shee.best: ", consultaMenu);
         */
-       
+    
         return {
             sessionState: {
                 dialogAction: {
@@ -231,14 +231,109 @@ async function handleConsultarMenuIntent(event,sessionAttributes,intentInfo,user
 
 }
 
-async function handleConsultaPreciosMenuIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log("Preparando respuesta para consultar precios del menu");
-
+    
+    try {
+        // Obtener datos actualizados del menú
+        const menuData = await getMenu();
+        
+        // Generar respuesta personalizada sobre precios
+        const respuesta = await generarRespuestaPreciosMenu(userInput, menuData);
+        
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: respuesta.mensaje
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error al procesar la consulta de precios:", error);
+        
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al consultar los precios. Por favor, intenta nuevamente en unos momentos."
+                }
+            ]
+        };
+    }
 }
 
-async function handleConsultaElementosMenuIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log("Preparando respuesta para consultar por elementos del menu");
-
+    
+    try {
+        // Obtener datos actualizados del menú
+        const menuData = await getMenu();
+        
+        // Generar respuesta personalizada basada en la consulta del usuario
+        const respuesta = await generarRespuestaElementoMenu(userInput, menuData);
+        
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: respuesta.mensaje
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error al procesar la consulta del elemento del menú:", error);
+        
+        // En caso de error, devolver un mensaje de error genérico
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al consultar el elemento del menú que mencionas. Por favor, intenta nuevamente en unos momentos."
+                }
+            ]
+        };
+    }
 }
 
 async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,userInput){
@@ -652,6 +747,7 @@ async function generarMensajeFallback(userInput,intentInfo) {
 }
 
 async function generarMensajeBienvenida(userInput) {
+    
     const systemPrompt = `
     Eres un chatbot amigable para un restaurante. Tu tarea es generar mensajes de bienvenida cálidos y acogedores.
     Debes mencionar que puedes ayudar a tomar pedidos y responder preguntas sobre el menú.
@@ -710,6 +806,122 @@ async function generarMensajeBienvenida(userInput) {
     }
 }
 
+async function generarRespuestaElementoMenu(userInput, menuData) {
+    const systemPrompt = `
+    Eres un asistente de restaurante amigable y servicial. Tienes acceso al siguiente menú actualizado:
+    ${JSON.stringify(menuData, null, 2)}
+
+    Tu tarea es:
+    1. Responder preguntas específicas sobre elementos del menú
+    2. Ser flexible con la escritura/ortografía de los nombres de los platillos
+    3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir algo similar del menú disponible
+    4. NO listar el menú completo, solo responder sobre los elementos específicos por los que se pregunta
+    5. Incluir precios y detalles relevantes de los elementos consultados
+
+    Formato de respuesta:
+    {
+        "mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado"
+    }
+    `;
+
+    const userPrompt = `
+    El cliente ha realizado la siguiente consulta sobre el menú:
+    "${userInput}"
+    
+    Por favor, genera una respuesta apropiada siguiendo las instrucciones dadas.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",  
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.7
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para consulta de elementos especificos del menú:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
+async function generarRespuestaPreciosMenu(userInput, menuData) {
+    const systemPrompt = `
+    Eres un asistente de restaurante especializado en informar sobre precios. Tienes acceso al siguiente menú actualizado:
+    ${JSON.stringify(menuData, null, 2)}
+
+    Tu tarea es:
+    1. Responder ÚNICAMENTE sobre los precios de los elementos consultados
+    2. Ser flexible con la escritura/ortografía de los nombres de los platillos
+    3. Si el cliente pregunta por algo que no está en el menú, indicar amablemente que ese elemento no está disponible
+    4. Mantener las respuestas concisas y enfocadas en los precios
+    5. Si el cliente pregunta por varios elementos, listar los precios de todos los elementos mencionados
+    6. No incluir descripciones detalladas de los platillos, solo nombres y precios
+
+    Formato de respuesta:
+    {
+        "mensaje": "Tu respuesta aquí, mencionando solo los precios de los elementos consultados"
+    }
+    `;
+
+    const userPrompt = `
+    El cliente ha realizado la siguiente consulta sobre precios:
+    "${userInput}"
+    
+    Por favor, genera una respuesta enfocada únicamente en los precios solicitados.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",  
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.5 // Temperatura más baja para respuestas más consistentes sobre precios
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para consulta de precios:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT para consulta de precios:", error);
+        throw error;
+    }
+}
 
 async function generarMensajeAgradecimiento(userInput) {
     const systemPrompt = `
@@ -1198,142 +1410,6 @@ async function extraerInformacionEnvioCliente(userInput) {
 
     } catch (error) {
         console.error("Error al procesar input con OpenAI:", error);
-        return null;
-    }
-}
-
-async function consultarElementosIndividualesOpenAI(userInput) {
-
-    try {
-        const systemPrompt = `Eres un asistente especializado en analizar si un texto hace referencia a elementos específicos del menú de una pizzería.
-        
-        El menú incluye:
-        - Combo 1
-        - Banquete 1
-        - Banquete 2
-        - Banquete 3
-        
-        Analiza el texto y determina si hace referencia a alguno de estos elementos.
-        Si el texto hace referencia a algún elemento del menú, devuelve exactamente uno de estos valores:
-        - "Combo 1"
-        - "Banquete 1"
-        - "Banquete 2"
-        - "Banquete 3"
-        
-        Ten en cuenta variaciones en la escritura como "combo #1", "banquete numero 3", etc.`;
-
-        const userPrompt = `Analiza el siguiente texto y determina si hace referencia a algún elemento del menú:
-        "${userInput}"
-        
-        Responde solo con un objeto JSON con este formato:
-        {
-            "valor": "nombre_exacto_del_elemento" // Debe ser uno de los 4 valores especificados
-        }
-        Si no hace referencia a ningún elemento del menú, devuelve null como valor.`;
-
-        const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: userPrompt
-                }
-            ],
-            temperature: 0.3
-        }, {
-            headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No se pudo extraer JSON válido de la respuesta");
-        }
-
-        console.log('[-] JSON extraído de la respuesta:', jsonMatch[0]);
-        
-        const result = JSON.parse(jsonMatch[0]);
-        console.log('[-] Resultado parseado:', result);
-
-        return result.valor; 
-
-    } catch (error) {
-        console.error("Error al consultar OpenAI:", error);
-        return null;
-    }
-}
-
-async function consultarPreciosIndividualesOpenAI(userInput) {
-
-
-    try {
-        const systemPrompt = `Eres un asistente especializado en analizar si un texto hace referencia a consultas de precios de elementos específicos del menú de una pizzería.
-        
-        El menú incluye:
-        - Combo 1
-        - Banquete 1
-        - Banquete 2
-        - Banquete 3
-        
-        Analiza el texto y determina si está preguntando por el precio de alguno de estos elementos.
-        Si el texto hace referencia a algún elemento del menú, devuelve exactamente uno de estos valores:
-        - "Combo 1"
-        - "Banquete 1"
-        - "Banquete 2"
-        - "Banquete 3"
-        
-        Ten en cuenta variaciones en la escritura como "cuánto cuesta el combo 1", "precio del banquete 3", etc.`;
-
-        const userPrompt = `Analiza el siguiente texto y determina si pregunta por el precio de algún elemento del menú:
-        "${userInput}"
-        
-        Responde solo con un objeto JSON con este formato:
-        {
-            "valor": "nombre_exacto_del_elemento" // Debe ser uno de los 4 valores especificados
-        }
-        Si no hace referencia al precio de ningún elemento del menú, devuelve null como valor.`;
-
-        const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: userPrompt
-                }
-            ],
-            temperature: 0.3
-        }, {
-            headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            console.log("No se pudo extraer JSON válido de la respuesta");
-            return null;
-        }
-
-        console.log('[-] JSON extraído de la respuesta:', jsonMatch[0]);
-        
-        const result = JSON.parse(jsonMatch[0]);
-        console.log('[-] Resultado parseado:', result);
-
-        return result.valor;
-
-    } catch (error) {
-        console.error("Error al consultar OpenAI:", error);
         return null;
     }
 }
