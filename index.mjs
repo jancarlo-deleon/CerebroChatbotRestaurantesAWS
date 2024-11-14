@@ -226,9 +226,78 @@ async function handleCancelarOrdenIntent(event,sessionAttributes,intentInfo,user
 
 }
 
-async function handleConsultarMenuIntent(event,sessionAttributes,intentInfo,userInput){
-    console.log("Preparando respuesta para bienvenida");
-
+async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput) {
+    console.log("Preparando respuesta para mostrar menú completo");
+    
+    try {
+        // Obtener datos actualizados del menú
+        const menuData = await getMenu();
+        
+        // Generar vista organizada del menú
+        const respuesta = await generarVistaMenu(menuData);
+        
+        // Preparar array de mensajes
+        const mensajes = [];
+        
+        // Agregar mensaje inicial
+        if (respuesta.mensajeInicial) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: respuesta.mensajeInicial
+            });
+        }
+        
+        // Agregar un mensaje por cada elemento del menú
+        for (const item of respuesta.mensajes) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: item.mensaje
+            });
+        }
+        
+        // Agregar mensaje final
+        if (respuesta.mensajeFinal) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: respuesta.mensajeFinal
+            });
+        }
+        
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: mensajes
+        };
+    } catch (error) {
+        console.error("Error al procesar la consulta del menú completo:", error);
+        
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al mostrar el menú. Por favor, intenta nuevamente en unos momentos."
+                }
+            ]
+        };
+    }
 }
 
 async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput) {
@@ -805,6 +874,75 @@ async function generarMensajeBienvenida(userInput) {
         throw error;
     }
 }
+
+async function generarVistaMenu(menuData) {
+    const systemPrompt = `
+    Eres un asistente de restaurante que presenta el menú. Tienes acceso al siguiente menú actualizado:
+    ${JSON.stringify(menuData, null, 2)}
+
+    Tu tarea es:
+    1. Generar un mensaje de presentación de introduccion breve (Que no sea hola, bienvenido, etc). Algo tipo: Con gusto, etc
+    2. Para cada elemento del menú, generar una descripción que SOLO incluya:
+       - Nombre del elemento
+       - Precio
+       - Descripción (si existe en los datos)
+    3. NO inventar ni agregar información que no esté en los datos proporcionados
+    4. NO incluir códigos de producto en las descripciones
+    5. NO agregar categorías o agrupaciones que no existan en los datos
+    6. Usar un formato consistente para cada elemento
+    7. Genera un mensaje donde se le pregunte al cliente y se le incite a ordenar algo o preguntar por alguna duda
+
+    Formato de respuesta:
+    {
+        "mensajes": [
+            {
+                "codigo": "CÓDIGO_DEL_ELEMENTO",
+                "mensaje": "Descripción formateada del elemento"
+            }
+        ],
+        "mensajeInicial": "Mensaje de bienvenida breve"
+        "mensajeFinal": "Mensaje donde se pregunta al cliente si va a ordenar o preguntar algo"
+    }
+    `;
+
+    const userPrompt = `
+    Por favor, genera los mensajes para cada elemento del menú siguiendo estrictamente las instrucciones dadas.
+    Solo usa la información disponible en los datos proporcionados.
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",  
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.5
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para presentación del menú:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT para mostrar menú:", error);
+        throw error;
+    }
+}
+
 
 async function generarRespuestaElementoMenu(userInput, menuData) {
     const systemPrompt = `
