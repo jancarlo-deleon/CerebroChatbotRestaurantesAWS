@@ -57,6 +57,10 @@ export const handler = async (event) => {
 
 //Handler de intenciones
 async function handlerIntents(event, sessionAttributes,intentInfo) {
+    console.log('=== Inicio de handlerIntents ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
     console.log("Se ha activado el manejador de intenciones");
     const userInput = event.inputTranscript.toLowerCase();
 
@@ -150,6 +154,9 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
 
 //Funciones para las intenciones
 async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleBienvenidaIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para bienvenida");
     
@@ -211,22 +218,38 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
 }
 
 async function handleOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleOrdenarIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+    
 
     console.log("Preparando respuesta para ordenar");
 
 }
 
 async function handleAgregarAOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleAgregarAOrdenarIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
     console.log("Preparando respuesta para agregar a la orden");
 
 }
 
 async function handleCancelarOrdenIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleCancelarOrdenIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
     console.log("Preparando respuesta para cancelar orden");
 
 }
 
 async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput) {
+    console.log('=== Inicio de handleConsultarMenuIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
     console.log("Preparando respuesta para mostrar menú completo");
     
     try {
@@ -301,6 +324,10 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
 }
 
 async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput) {
+    console.log('=== Inicio de handleConsultaPreciosMenuIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
     console.log("Preparando respuesta para consultar precios del menu");
     
     try {
@@ -353,6 +380,10 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
 }
 
 async function handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput) {
+    console.log('=== Inicio de handleConsultaElementosMenuIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
     console.log("Preparando respuesta para consultar por elementos del menu");
     
     try {
@@ -406,6 +437,9 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
 }
 
 async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleAgradecimientoIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para agradecimiento");
     
@@ -459,6 +493,9 @@ async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,use
 }
 
 async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleMetodosDePagoIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para metodos de pago");
     
@@ -512,6 +549,9 @@ async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,user
 }
 
 async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,userInput){
+    console.log('=== Inicio de handleMetodosDeEnvioIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para metodos de envio");
     
@@ -566,6 +606,8 @@ async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,use
 
 //Metodos para usar sheet.best
 async function getInicio() {
+    console.log("Iniciando consulta a la hoja 'INICIO'");
+
     try {
         const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/INICIO`);
         console.log("Datos crudos de la hoja INICIO:", response.data);
