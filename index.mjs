@@ -1,11 +1,11 @@
 import axios from 'axios';
-import dotenv from 'dotenv'; 
+import dotenv from 'dotenv';
 
 //Obtener las variables de sesion desde el .env
 dotenv.config();
 
 //Constantes
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY; 
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_URL = process.env.OPENAI_API_URL;
 const SHEET_BEST_API_URL = process.env.SHEET_BEST_API_URL;
 
@@ -20,14 +20,14 @@ export const handler = async (event) => {
     console.log("Input obtenido de la conversación: ", userInput);
 
     let intentName = event.sessionState.intent.name;
-    console.log("Intent recibido:",intentName );
+    console.log("Intent recibido:", intentName);
 
     if (intentName == 'InicioIntent') {
         console.log("Se esta activando esta parte por medio de InicioIntent");
 
         const chatGPTResponse = await interpretarIntent(userInput);
 
-         // Extraer el JSON de la respuesta de ChatGPT
+        // Extraer el JSON de la respuesta de ChatGPT
         const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT relacionada con la interpretacion de intención");
@@ -36,12 +36,19 @@ export const handler = async (event) => {
         const intentInfo = JSON.parse(jsonMatch[0]);
         console.log("El contenido de la intrepretación del input para manejar el intent es: ", intentInfo);
 
-        return handlerIntents(event, sessionAttributes,intentInfo);
+        return handlerIntents(event, sessionAttributes, intentInfo);
+    }
+
+    if (intentName == 'OrdenarIntent') {
+        console.log("Se esta activando esta parte por medio de OrdenarIntent");
+
+        return handleOrdenarIntent(event, sessionAttributes, userInput);
+
     }
 
     const chatGPTResponse = await interpretarIntent(userInput);
 
-     // Extraer el JSON de la respuesta de ChatGPT
+    // Extraer el JSON de la respuesta de ChatGPT
     const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
         throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT relacionada con la interpretacion de intención");
@@ -50,13 +57,13 @@ export const handler = async (event) => {
     const intentInfo = JSON.parse(jsonMatch[0]);
     console.log("El contenido de la intrepretación del input para manejar el intent es: ", intentInfo);
 
-    return handlerIntents(event, sessionAttributes,intentInfo);
+    return handlerIntents(event, sessionAttributes, intentInfo);
 
 }
 
 
 //Handler de intenciones
-async function handlerIntents(event, sessionAttributes,intentInfo) {
+async function handlerIntents(event, sessionAttributes, intentInfo) {
     console.log('=== Inicio de handlerIntents ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
@@ -67,70 +74,70 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
     let intentHandler = intentInfo.handle;
     console.log("Valor de handler obtenido de la interpretación de input: ", intentHandler);
 
-    if(intentHandler == 'handleBienvenidaIntent'){
+    if (intentHandler == 'handleBienvenidaIntent') {
         console.log("Se estará redirigiendo hacia handleBienvenidaIntent");
 
-        return  handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleBienvenidaIntent(event, sessionAttributes, intentInfo, userInput);
     }
-    
-    if(intentHandler == 'handleOrdenarIntent'){
+
+    if (intentHandler == 'handleOrdenarIntent') {
         console.log("Se estará redirigiendo hacia handleOrdenarIntent");
 
-        return  handleOrdenarIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleOrdenarIntent(event, sessionAttributes, userInput);
     }
 
-    if(intentHandler == 'handleAgregarAOrdenarIntent'){
+    if (intentHandler == 'handleAgregarAOrdenarIntent') {
         console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
 
-        return  handleAgregarAOrdenarIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleAgregarAOrdenarIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleCancelarOrdenIntent'){
+    if (intentHandler == 'handleCancelarOrdenIntent') {
         console.log("Se estará redirigiendo hacia handleCancelarOrdenIntent");
 
-        return  handleCancelarOrdenIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleCancelarOrdenIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleConsultarMenuIntent'){
+    if (intentHandler == 'handleConsultarMenuIntent') {
         console.log("Se estará redirigiendo hacia handleConsultarMenuIntent");
 
-        return  handleConsultarMenuIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleConsultaPreciosMenuIntent'){
+    if (intentHandler == 'handleConsultaPreciosMenuIntent') {
         console.log("Se estará redirigiendo hacia handleConsultaPreciosMenuIntent");
 
-        return  handleConsultaPreciosMenuIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleConsultaElementosMenuIntent'){
+    if (intentHandler == 'handleConsultaElementosMenuIntent') {
         console.log("Se estará redirigiendo hacia handleConsultaElementosMenuIntent");
 
-        return  handleConsultaElementosMenuIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleAgradecimientoIntent'){
+    if (intentHandler == 'handleAgradecimientoIntent') {
         console.log("Se estará redirigiendo hacia handleAgradecimientoIntent");
 
-        return  handleAgradecimientoIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleMetodosDePagoIntent'){
+    if (intentHandler == 'handleMetodosDePagoIntent') {
         console.log("Se estará redirigiendo hacia handleMetodosDePagoIntent");
 
-        return  handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
-    if(intentHandler == 'handleMetodosDeEnvioIntent'){
+    if (intentHandler == 'handleMetodosDeEnvioIntent') {
         console.log("Se estará redirigiendo hacia handleMetodosDeEnvioIntent");
 
-        return  handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,userInput);
+        return handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
     // Si no se detectan las palabras clave, procedemos con el fallback estándar
     console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
     let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
-    console.log("Contenido de fallbackMessage generado desde OpenAI: ",fallbackMessage);
+    console.log("Contenido de fallbackMessage generado desde OpenAI: ", fallbackMessage);
 
     return {
         sessionState: {
@@ -153,13 +160,13 @@ async function handlerIntents(event, sessionAttributes,intentInfo) {
 }
 
 //Funciones para las intenciones
-async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleBienvenidaIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleBienvenidaIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para bienvenida");
-    
+
     try {
         // Obtener el mensaje de bienvenida
         const mensajeBienvenida = await generarMensajeBienvenida(userInput);
@@ -172,7 +179,7 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
         const consultaMenu = await getMenu();
         console.log("informacion obtenida de la hoja MENU a traves de shee.best: ", consultaMenu);
         */
-    
+
         return {
             sessionState: {
                 dialogAction: {
@@ -193,7 +200,7 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
         };
     } catch (error) {
         console.error("Error en handleBienvenidaIntent:", error);
-        
+
         // En caso de error, devolver un mensaje de error genérico
         return {
             sessionState: {
@@ -217,17 +224,187 @@ async function handleBienvenidaIntent(event,sessionAttributes,intentInfo,userInp
 
 }
 
-async function handleOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleOrdenarIntent(event, sessionAttributes, userInput) {
     console.log('=== Inicio de handleOrdenarIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
-    
+
 
     console.log("Preparando respuesta para ordenar");
 
+    console.log("Input de Entrada del usuario:", userInput);
+
+    try {
+        // Obtener datos actualizados del menú
+        const menuData = await getMenu();
+
+        // Verificar si es una orden directa o solo la intención de ordenar
+        const isDirectOrder = await verificarSiEsOrdenDirecta(userInput, menuData);
+        console.log("Es orden directa? :", isDirectOrder);
+
+        if (!isDirectOrder) {
+            console.log("No es una orden directa. Se verificará el slot 'ordenUsuario'.");
+
+            // Verificar si el slot 'ordenUsuario' tiene valor
+            const slotOrdenUsuario = event.sessionState.intent.slots?.ordenUsuario?.value?.interpretedValue;
+
+            if (!slotOrdenUsuario) {
+                console.log("El slot 'ordenUsuario' está vacío. Solicitando al usuario...");
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "ordenUsuario"
+                        },
+                        intent: {
+                            name: "OrdenarIntent",
+                            state: "InProgress",
+                            slots: event.sessionState.intent.slots
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "¿Qué elementos del menú te gustaría ordenar?"
+                        }
+                    ]
+                };
+            }
+
+            userInput = slotOrdenUsuario;
+
+            console.log("Valor de userInput tomado desde el slot: ", userInput)
+
+        }
+
+        console.log("El usuario ha hecho una orden directa");
+
+
+        console.log("Ahora, se empezará a validar si es una orden válida")
+
+
+        let isValidOrder = await verificarSiEsOrdenValida(userInput, menuData);
+
+        console.log("Es orden valida? :", isValidOrder.isValidOrder);
+
+        if (!isValidOrder.isValidOrder) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Lo siento, lo que tratas de ordenar no forma parte del lo que ofrecemos."
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: "Puedes consultar el menú para conocer nuestros combos y banquetes."
+                    }
+                ]
+            };
+        }
+
+
+        console.log("Se procederá a utilizar ChatGPT para empezar con el proceso de toma de orden")
+        let ordenarGPT = await llamadaAChatGPTParaOrdenar(userInput, menuData);
+
+        // Extraer el JSON de la respuesta de ChatGPT
+        const jsonMatch = ordenarGPT.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT");
+        }
+
+        const orderInfo = JSON.parse(jsonMatch[0]);
+
+        // Guardar la información en las variables de sesión
+        sessionAttributes.orden = orderInfo.orden;
+        sessionAttributes.totalUnidades = orderInfo.totalUnidades;
+        sessionAttributes.comentariosOrden = orderInfo.comentarios;
+        sessionAttributes.totalCosto = orderInfo.totalCosto;
+
+        console.log("Se han actualizado los atributos de sesión actuales para ordenar:", JSON.stringify(sessionAttributes, null, 2));
+
+        // Construir los mensajes separados
+        let mensajes = [];
+
+        // Agregar el resumen al primer mensaje
+        mensajes.push({
+            contentType: "PlainText",
+            content: `Has pedido:\n\n${orderInfo.orden}`
+        });
+
+        // Agregar el total en un segundo mensaje
+        mensajes.push({
+            contentType: "PlainText",
+            content: `Total a pagar: $${orderInfo.totalCosto}`
+        });
+
+        // Agregar los comentarios como un tercer mensaje, si existen
+        if (orderInfo.comentarios) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: `Comentarios:\n ${orderInfo.comentarios}`
+            });
+        }
+
+        // Mensaje adicional preguntando si necesita más ayuda
+        mensajes.push({
+            contentType: "PlainText",
+            content: "¿Hay algo más en lo que te pueda ayudar?"
+        });
+
+        // Retornar el resultado con los mensajes construidos
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: mensajes
+        };
+
+
+    } catch (error) {
+        console.error("Error al procesar la toma de orden:", error);
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al tratar de tomar tu orden. Por favor, intenta nuevamente en unos momentos."
+                }
+            ]
+        };
+    }
+
+
 }
 
-async function handleAgregarAOrdenarIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleAgregarAOrdenarIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleAgregarAOrdenarIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
@@ -236,7 +413,7 @@ async function handleAgregarAOrdenarIntent(event,sessionAttributes,intentInfo,us
 
 }
 
-async function handleCancelarOrdenIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleCancelarOrdenIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
@@ -251,17 +428,17 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para mostrar menú completo");
-    
+
     try {
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
-        
+
         // Generar vista organizada del menú
         const respuesta = await generarVistaMenu(menuData);
-        
+
         // Preparar array de mensajes
         const mensajes = [];
-        
+
         // Agregar mensaje inicial
         if (respuesta.mensajeInicial) {
             mensajes.push({
@@ -269,7 +446,7 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
                 content: respuesta.mensajeInicial
             });
         }
-        
+
         // Agregar un mensaje por cada elemento del menú
         for (const item of respuesta.mensajes) {
             mensajes.push({
@@ -277,7 +454,7 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
                 content: item.mensaje
             });
         }
-        
+
         // Agregar mensaje final
         if (respuesta.mensajeFinal) {
             mensajes.push({
@@ -285,7 +462,7 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
                 content: respuesta.mensajeFinal
             });
         }
-        
+
         return {
             sessionState: {
                 dialogAction: {
@@ -301,7 +478,7 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
         };
     } catch (error) {
         console.error("Error al procesar la consulta del menú completo:", error);
-        
+
         return {
             sessionState: {
                 dialogAction: {
@@ -329,14 +506,14 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para consultar precios del menu");
-    
+
     try {
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
-        
+
         // Generar respuesta personalizada sobre precios
         const respuesta = await generarRespuestaPreciosMenu(userInput, menuData);
-        
+
         return {
             sessionState: {
                 dialogAction: {
@@ -357,7 +534,7 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
         };
     } catch (error) {
         console.error("Error al procesar la consulta de precios:", error);
-        
+
         return {
             sessionState: {
                 dialogAction: {
@@ -385,14 +562,14 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para consultar por elementos del menu");
-    
+
     try {
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
-        
+
         // Generar respuesta personalizada basada en la consulta del usuario
         const respuesta = await generarRespuestaElementoMenu(userInput, menuData);
-        
+
         return {
             sessionState: {
                 dialogAction: {
@@ -413,7 +590,7 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
         };
     } catch (error) {
         console.error("Error al procesar la consulta del elemento del menú:", error);
-        
+
         // En caso de error, devolver un mensaje de error genérico
         return {
             sessionState: {
@@ -436,13 +613,13 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
     }
 }
 
-async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleAgradecimientoIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para agradecimiento");
-    
+
     try {
         // Obtener el mensaje de agradecimiento
         const mensajeAgradecimiento = await generarMensajeAgradecimiento(userInput);
@@ -468,7 +645,7 @@ async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,use
         };
     } catch (error) {
         console.error("Error en handleAgradecimientoIntent:", error);
-        
+
         // En caso de error, devolver un mensaje de error genérico
         return {
             sessionState: {
@@ -492,13 +669,13 @@ async function handleAgradecimientoIntent(event,sessionAttributes,intentInfo,use
 
 }
 
-async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleMetodosDePagoIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para metodos de pago");
-    
+
     try {
         // Obtener el mensaje de metodos de pago
         const mensajeMetodosDePago = await generarMensajeMetodosDePago(userInput);
@@ -524,7 +701,7 @@ async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,user
         };
     } catch (error) {
         console.error("Error en handleMetodosDePagoIntent:", error);
-        
+
         // En caso de error, devolver un mensaje de error genérico
         return {
             sessionState: {
@@ -548,13 +725,13 @@ async function handleMetodosDePagoIntent(event,sessionAttributes,intentInfo,user
 
 }
 
-async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,userInput){
+async function handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleMetodosDeEnvioIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para metodos de envio");
-    
+
     try {
         // Obtener el mensaje de metodos de envio
         const mensajeMetodosDeEnvio = await generarMensajeMetodosDeEnvio(userInput);
@@ -580,7 +757,7 @@ async function handleMetodosDeEnvioIntent(event,sessionAttributes,intentInfo,use
         };
     } catch (error) {
         console.error("Error en handleMetodosDeEnvioIntent:", error);
-        
+
         // En caso de error, devolver un mensaje de error genérico
         return {
             sessionState: {
@@ -679,7 +856,7 @@ export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elem
 
 
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
-async function interpretarIntent(userInput){
+async function interpretarIntent(userInput) {
     const systemPrompt = `Eres un asistente altamente especializado en la interpretación de intenciones para un chatbot de restaurante. 
     Tu única función es categorizar precisamente las intenciones del usuario en categorías predefinidas.
 
@@ -769,7 +946,7 @@ async function interpretarIntent(userInput){
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",  
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: 'system',
@@ -799,7 +976,7 @@ async function interpretarIntent(userInput){
     }
 }
 
-async function generarMensajeFallback(userInput,intentInfo) {
+async function generarMensajeFallback(userInput, intentInfo) {
     const systemPrompt = `
     Eres un asistente de chatbot para un restaurante. Tu tarea es generar un mensaje amigable y apropiado cuando un usuario solicita algo que no está dentro de las capacidades o servicios del restaurante.
 
@@ -827,7 +1004,7 @@ async function generarMensajeFallback(userInput,intentInfo) {
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",  
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: 'system',
@@ -858,7 +1035,7 @@ async function generarMensajeFallback(userInput,intentInfo) {
 }
 
 async function generarMensajeBienvenida(userInput) {
-    
+
     const systemPrompt = `
     Eres un chatbot amigable para un restaurante. Tu tarea es generar mensajes de bienvenida cálidos y acogedores.
     Debes mencionar que puedes ayudar a tomar pedidos y responder preguntas sobre el menú.
@@ -954,7 +1131,7 @@ async function generarVistaMenu(menuData) {
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",  
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: 'system',
@@ -977,7 +1154,7 @@ async function generarVistaMenu(menuData) {
         console.log("--------------------------------------");
         console.log(response.data.choices[0].message.content);
         console.log("--------------------------------------");
-        
+
         return JSON.parse(response.data.choices[0].message.content);
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT para mostrar menú:", error);
@@ -1013,7 +1190,7 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",  
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: 'system',
@@ -1036,7 +1213,7 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
         console.log("--------------------------------------");
         console.log(response.data.choices[0].message.content);
         console.log("--------------------------------------");
-        
+
         return JSON.parse(response.data.choices[0].message.content);
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT:", error);
@@ -1072,7 +1249,7 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",  
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: 'system',
@@ -1095,7 +1272,7 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
         console.log("--------------------------------------");
         console.log(response.data.choices[0].message.content);
         console.log("--------------------------------------");
-        
+
         return JSON.parse(response.data.choices[0].message.content);
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT para consulta de precios:", error);
@@ -1143,7 +1320,7 @@ async function generarMensajeAgradecimiento(userInput) {
                     content: userPrompt
                 }
             ],
-            temperature: 0.7 
+            temperature: 0.7
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -1278,68 +1455,45 @@ async function generarMensajeMetodosDeEnvio(userInput) {
     }
 }
 
-async function llamadaAChatGPTParaOrdenar(userInput) {
+async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
 
-    const systemPrompt = `Eres un asistente especializado en tomar órdenes para una pizzería que maneja un menú específico con solo 4 productos:
+    // Convertir precios del menú a números
+    const menuPreprocesado = menuData.map(item => ({
+        ...item,
+        Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
+    }));
 
-    1. Combo 1 ($4.75):
-       - 1 Pizza Personal de 1 ingrediente (Peperoni o Jamón)
-       - Pan con ajo supremo (2 rodajas)
-       - 1 Soda Pepsi de 12 onz.
+    const systemPrompt = `Eres un asistente especializado en tomar órdenes para un restaurante.
+    Tienes acceso al siguiente menú actualizado:
+    ${JSON.stringify(menuPreprocesado, null, 2)}
 
-    2. Banquete 1 ($12.75):
-       - 1 Pizza Gigante de 8 pedazos (Peperoni o Jamón)
-       - Orden de Minipalitroques (6 piezas)
-       - Pan con ajo supremo (4 rodajas)
-       - 1 Soda Pepsi de 1.5 ltrs
+    Tu tarea es tomar la orden del usuario pero SOLO PUEDES TOMAR ORDENES QUE SI TENGAN ELEMENTOS QUE ESTEN PRESENTES EN EL MENU QUE SE TE HA COMPARTIDO
 
-    3. Banquete 2 ($17.25):
-       - 2 Pizzas Gigante de 8 pedazos (Peperoni o Jamón)
-       - Orden de Minipalitroques (6 piezas)
-       - Pan con ajo supremo (4 rodajas)
-       - 1 Soda Pepsi de 1.5 ltrs
+    Solo puedes procesar órdenes que incluyan estos productos exactos. 
+    Y tambien puedes procesar comentarios, los cuales serian cosas extras que pediría el cliente como por ejemplo servilletas o si desea agregar algun ingrediente o quitar y entre otras cosas
+    Igual puedes procesar si se escriben de manera distinta los elementos del menu, ya sea que sean variaciones en su escritura pero que hagan referencia valida a algo del menu
+    Toda escritura que haga referencia al menu es válida.`;
 
-    4. Banquete 3 ($21.75):
-       - 1 Pizza Super Gigante de 12 pedazos (Peperoni o Jamón)
-       - Orden de Nuditos (6 piezas)
-       - Orden de Salchipanes (6 piezas)
-       - Orden de Alitas (6 piezas)
-       - 1 Soda Pepsi de 1.5 ltrs
-
-    Solo puedes procesar órdenes que incluyan estos productos exactos. Los únicos ingredientes disponibles para las pizzas son Peperoni y Jamón.
-    Y tambien puedes procesar comentarios, los cuales serian cosas extras que pediria el cliente como por ejemplo servilletas y entre otras cosas
-    Igual puedes procesar si se escriben de manera distinta los elementos del menu, como combo #1, banquete numero 3, etc. y si se escribe combos o banquete en singular o plural
-        Toda escritura que haga referencia al menu de los 4 elementos que se te listaron es válida.`;
-
-    const userPrompt = `Analiza el siguiente pedido de pizzería y extrae la información relevante:
+    const userPrompt = `Analiza el siguiente pedido  y extrae la información relevante:
     "${userInput}"
     
-    Debes responder con un objeto JSON que contenga exactamente estas propiedades:
+    Debes responder con un objeto JSON.
+
+    El objeto JSON de respuesta tiene que contener exactamente estas propiedades:
     {
-        "ordenInvalida": " tienes que escribir lo siguiente para este clave valor: "Lo siento, no se puede procesar tu pedido ya que estas pidiendo algo que no existe en nuestro menu". Si por otro lado, la orden es válida, dejar vacío",
-        "orden": "Solo incluir un resumen conciso del pedido si es válido",
-        "unidadesCombo1": "número de Combo 1 pedidos",
-        "ingredienteCombo1": "Especificar ingredientes según estas reglas:
-            - Si no se especifica: 'Peperoni'
-            - Si se pide otro ingrediente que no sea Peperoni o Jamón: 'Pepperoni'
-            - Si son múltiples unidades con mismo ingrediente: 'Todas de Peperoni' o 'Todas de Jamón'
-            - Si son diferentes ingredientes: 'X de Jamón y Y de Peperoni'",
-        "unidadesBanquete1": "número de Banquete 1 pedidos",
-        "ingredienteBanquete1": "Aplican las mismas reglas de ingredientes que Combo 1",
-        "unidadesBanquete2": "número de Banquete 2 pedidos",
-        "ingredienteBanquete2": "Aplican las mismas reglas de ingredientes que Combo 1",
-        "unidadesBanquete3": "número de Banquete 3 pedidos",
-        "ingredienteBanquete3": "Aplican las mismas reglas de ingredientes que Combo 1",
+        "orden": "Solo incluir un resumen conciso del pedido, debe incluir algo como: '(nombre del elemento del menu) - (cantidad de unidades) unidad(es)'. Si la orden incluye varios elementos del menu, se deben de separar por coma. Despues del valor de la cantidad mira si es necesario colocar unidad o unidades dependiendo de la cantidad de elementos que se piden del elemento del menu",
         "totalUnidades": "suma total de unidades pedidas",
         "comentarios": "información adicional sobre especificaciones del cliente",
-        "totalCosto": "cálculo del costo total basado en: Combo 1 = $4.75, Banquete 1 = $12.75, Banquete 2 = $17.25, Banquete 3 = $21.75"
+        "totalCosto": "cálculo del costo total basado en los precios del menu que se te compartió"
     }
+
+    Realiza el cálculo de manera precisa y sin redondeos adicionales. Respeta los precios exactos del menú compartido.
 
     Solo responde con el objeto JSON, sin texto adicional ni marcadores de código.`;
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",  
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: 'system',
@@ -1350,7 +1504,7 @@ async function llamadaAChatGPTParaOrdenar(userInput) {
                     content: userPrompt
                 }
             ],
-            temperature: 0.3  
+            temperature: 0.3
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -1475,25 +1629,31 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual) {
         }
         throw error;
     }
-    
+
 }
 
-async function verificarSiEsSeOrdenaDirectamente(userInput) {
+async function verificarSiEsOrdenDirecta(userInput) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en analizar si un texto contiene una orden directa para una pizzería.
-        Debes verificar si el texto incluye menciones específicas a productos del menú con cantidades.
-        
-        El menú incluye:
-        - Combo 1
-        - Banquete 1
-        - Banquete 2
-        - Banquete 3
-        
-        Igual puedes procesar si se escriben de manera distinta, como combo #1, banquete numero 3, etc.
-        Toda escritura que haga referencia al menu de los 4 elementos que se te listaron es válida.`;
+        const systemPrompt = `Eres un asistente especializado en analizar si un texto contiene una orden directa para ordenar 
+        algo.
 
-        const userPrompt = `Analiza el siguiente texto y determina si contiene una orden directa con productos y cantidades:
+        Debes verificar si el texto se considera o ni como una orden directa.
+        
+        Para saber si es directa o no, ten en cuenta lo siguiente:
+
+        Si el texto que vas a analizar tiene más de 16 caracteres(tambien se cuentan los espacios), entonces se considera como una orden directa.
+        Tambien considera en sí, el contenido del texto. Un ejemplo seria un texto como "hola me gustaria ordenar por favor".Si bien 
+        tiene mas de 16 caracteres, no se debe de considerar como orden directa ya que en ningun momento esta mencionando algo que quiera ordenar, solo
+        tiene la intencion de ordenar, por lo cual, NO ES ORDEN DIRECTA.
+
+        Se considera orden directa si tiene mas de 16 caracteres  y si directamente en el input se esta mencionando algo que quiera ordenar.
+        Si se pasan de los 16 caracteres pero en el input no indica algo a ordenar y solo denota la intencion, entonces NO ES ORDEN DIRECTA
+
+        Si no se cumplen las condiciones mencionadas, entonces NO ES UNA ORDEN DIRECTA
+        `;
+
+        const userPrompt = `Analiza el siguiente texto y determina si es una orden directa o no:
         "${userInput}"
         
         Responde solo con un objeto JSON con este formato:
@@ -1522,6 +1682,10 @@ async function verificarSiEsSeOrdenaDirectamente(userInput) {
             }
         });
 
+        console.log("Respuesta de ChatGPT para validar si es orden directa:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
         const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             throw new Error("No se pudo extraer JSON válido de la respuesta");
@@ -1532,6 +1696,86 @@ async function verificarSiEsSeOrdenaDirectamente(userInput) {
 
     } catch (error) {
         console.error("Error al verificar si es orden directa:", error);
+        return false;
+    }
+}
+
+async function verificarSiEsOrdenValida(userInput, menuData) {
+
+    try {
+        const systemPrompt = `Eres un asistente especializado en analizar órdenes de menú con un enfoque altamente flexible. 
+        Tus objetivos son:
+
+        Identificar elementos del menú con máxima flexibilidad:
+        - Ignora diferencias de mayúsculas/minúsculas
+        - Acepta variaciones con/sin acentos
+        - Permite singular/plural
+        - Tolera pequeñas variaciones ortográficas
+        - Compara esencia del producto, no exactitud literal
+
+        Menú disponible:
+        ${JSON.stringify(menuData, null, 2)}
+
+        Criterios de validación:
+        - Prioriza la coincidencia sustancial sobre la precisión literal
+        - Verifica que cada elemento mencionado exista en el menú
+        - Sé generoso en la interpretación, pero mantén rigor en la validación
+        `;
+
+        const userPrompt = `Analiza el siguiente texto de orden con MÁXIMA FLEXIBILIDAD:
+        "${userInput}"
+        
+        Instrucciones para tu respuesta:
+        - Evalúa si TODOS los elementos mencionados corresponden al menú
+        - Usa un criterio amplio de coincidencia
+        - Si hay al menos una coincidencia parcial razonable con un elemento del menú, considera la orden VÁLIDA
+        - La cantidad de elementos no es relevante para la validez
+
+        Responde ÚNICAMENTE con este JSON:
+        {
+            "isValidOrder": boolean,
+            "reason": "Explicación breve de la validación"
+        }
+
+        IMPORTANTE: 
+        - Sé extremadamente flexible en la comparación
+        - Prioriza la intención sobre la exactitud
+        `;
+
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.5
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para validar si es orden valida:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo extraer JSON válido de la respuesta");
+        }
+
+        const result = JSON.parse(jsonMatch[0]);
+        return result;
+
+    } catch (error) {
+        console.error("Error al verificar si es orden valida:", error);
         return false;
     }
 }
