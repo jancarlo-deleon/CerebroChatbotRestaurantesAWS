@@ -56,7 +56,7 @@ export const handler = async (event) => {
     if (intentName == 'CancelarOrdenIntent') {
         console.log("Se esta activando esta parte por medio de CancelarOrdenIntent");
 
-        return handleCancelarOrdenIntent(event, sessionAttributes, userInput);
+        return handleCancelarOrdenIntent(event, sessionAttributes);
 
     }
 
@@ -92,43 +92,43 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
         case 'handleBienvenidaIntent':
             console.log("Se estará redirigiendo hacia handleBienvenidaIntent");
             return handleBienvenidaIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleOrdenarIntent':
             console.log("Se estará redirigiendo hacia handleOrdenarIntent");
             return handleOrdenarIntent(event, sessionAttributes, userInput);
-        
+
         case 'handleAgregarAOrdenarIntent':
             console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
             return handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleCancelarOrdenIntent':
             console.log("Se estará redirigiendo hacia handleCancelarOrdenIntent");
-            return handleCancelarOrdenIntent(event, sessionAttributes, intentInfo, userInput);
-        
+            return handleCancelarOrdenIntent(event, sessionAttributes, intentInfo);
+
         case 'handleConsultarMenuIntent':
             console.log("Se estará redirigiendo hacia handleConsultarMenuIntent");
             return handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleConsultaPreciosMenuIntent':
             console.log("Se estará redirigiendo hacia handleConsultaPreciosMenuIntent");
             return handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleConsultaElementosMenuIntent':
             console.log("Se estará redirigiendo hacia handleConsultaElementosMenuIntent");
             return handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleAgradecimientoIntent':
             console.log("Se estará redirigiendo hacia handleAgradecimientoIntent");
             return handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleMetodosDePagoIntent':
             console.log("Se estará redirigiendo hacia handleMetodosDePagoIntent");
             return handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         case 'handleMetodosDeEnvioIntent':
             console.log("Se estará redirigiendo hacia handleMetodosDeEnvioIntent");
             return handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput);
-        
+
         default:
             // Si no se detectan las palabras clave, procedemos con el fallback estándar
             console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
@@ -443,7 +443,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
     // Obtener el input del usuario, ya sea del slot o del evento original
     let inputSlot = event.sessionState.intent.slots?.nuevaOrden?.value?.interpretedValue;
     console.log("Valor del Input capturado a partir del Slot: ", inputSlot);
-    let inputDirecto =  event.inputTranscript.toLowerCase();
+    let inputDirecto = event.inputTranscript.toLowerCase();
     console.log("Valor del Input capturado directamente: ", inputDirecto);
 
     let nuevoInput;
@@ -532,7 +532,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
             comentarios: sessionAttributes.comentariosOrden || ""
         };
 
-        const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual,menuData);
+        const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual, menuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
         const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
@@ -596,7 +596,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
 
 
-    } catch(error){
+    } catch (error) {
 
         console.error("Error al tratar de agregar nuevos elementos a la orden:", error);
         return {
@@ -622,12 +622,143 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
 }
 
-async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo, userInput) {
+async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo) {
     console.log('=== Inicio de handleCancelarOrdenIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para cancelar orden");
+
+    // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
+    const tieneOrdenActiva = sessionAttributes.orden &&
+        sessionAttributes.totalUnidades !== undefined &&
+        (sessionAttributes.totalCosto !== undefined);
+
+    console.log("Existe alguna orden activa? :", tieneOrdenActiva);
+
+    if (!tieneOrdenActiva) {
+        console.log("NO se ha encontrado alguna orden activa")
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "No hay ninguna orden activa para cancelar. Para realizar un pedido, puedo mostrarte nuestro menú."
+                }
+            ]
+        };
+    }
+
+    // Verificar si está esperando confirmacion para cancelar la orden
+    if (!sessionAttributes.esperandoConfirmacionCancelar) {
+
+        let resumenActual = `Tu pedido en estos momentos es: ${sessionAttributes.orden} \n`;
+
+        resumenActual += `\nTotal a pagar: $${sessionAttributes.totalCosto}`;
+
+
+        if (sessionAttributes.comentariosOrden) {
+            resumenActual += `\n\nComentarios:\n${sessionAttributes.comentariosOrden}`;
+        }
+
+        // Actualizar estado para esperar confirmación
+        sessionAttributes.esperandoConfirmacionCancelar = true;
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "ConfirmIntent"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "InProgress"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: resumenActual
+                },
+                {
+                    contentType: "PlainText",
+                    content: "¿Estás seguro de querer cancelar esta orden? "
+                }
+            ]
+        };
+
+    } else {
+
+        // Procesar la respuesta del usuario
+        const userInput = event.inputTranscript.toLowerCase();
+        const esConfirmacion = await verificarConfirmacion(userInput);
+
+        console.log("Es confirmacion? :", esConfirmacion.isConfirmacion)
+
+        if (esConfirmacion.isConfirmacion) {
+            // Si el usuario confirma, limpiar todas las variables de sesión
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Fulfilled"
+                    },
+                    sessionAttributes: {} // Limpia todas las variables de sesión
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Tu orden ha sido cancelada exitosamente."
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: "Si deseas realiar alguna otra acción, con gusto puedes indicármelo"
+                    }
+                ]
+            };
+        } else {
+            // Si el usuario no confirma, mantener las variables de sesión
+            const sessionAttributesActualizados = { ...sessionAttributes };
+            delete sessionAttributesActualizados.esperandoConfirmacionCancelar;
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Fulfilled"
+                    },
+                    sessionAttributes: sessionAttributesActualizados
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Entendido, tu orden se mantiene sin cambios"
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: "Si gustas hacer alguna otra acción, estoy a la orden"
+                    }
+
+                ]
+            };
+        }
+
+    }
 
 }
 
@@ -1732,7 +1863,7 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
     }
 }
 
-async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual,menuData) {
+async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData) {
 
     // Convertir precios del menú a números
     const menuPreprocesado = menuData.map(item => ({
@@ -1965,6 +2096,68 @@ async function verificarSiEsOrdenValida(userInput, menuData) {
 
     } catch (error) {
         console.error("Error al verificar si es orden valida:", error);
+        return false;
+    }
+}
+
+async function verificarConfirmacion(userInput) {
+
+    try {
+        const systemPrompt = `Eres un asistente especializado en analizar texto para confimar cancelaciones de ordenes con un enfoque altamente flexible. 
+        
+        A partir del input que se te comparta, debes evaluarlo y concluir si lo que el input contiene es una afirmacion o no.
+
+        Cualquier indicio de que se este confirmando la accion que describa el input, se considera como válida.
+
+        `;
+
+        const userPrompt = `Analiza el siguiente texto con MÁXIMA FLEXIBILIDAD:
+        "${userInput}"
+        
+        Evalua si el texto indica si se esta confirmando, afirmando, etc. 
+
+        Responde ÚNICAMENTE con este JSON:
+        {
+            "isConfirmacion": boolean,
+            "reason": "Explicación breve de la validación"
+        }
+
+        `;
+
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.4
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para validar confirmacion:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo extraer JSON válido de la respuesta");
+        }
+
+        const result = JSON.parse(jsonMatch[0]);
+        return result;
+
+    } catch (error) {
+        console.error("Error al verificar confirmacion:", error);
         return false;
     }
 }
