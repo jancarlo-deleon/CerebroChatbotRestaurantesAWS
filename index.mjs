@@ -53,6 +53,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'CancelarOrdenIntent') {
+        console.log("Se esta activando esta parte por medio de CancelarOrdenIntent");
+
+        return handleCancelarOrdenIntent(event, sessionAttributes, userInput);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -81,89 +88,72 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
     let intentHandler = intentInfo.handle;
     console.log("Valor de handler obtenido de la interpretación de input: ", intentHandler);
 
-    if (intentHandler == 'handleBienvenidaIntent') {
-        console.log("Se estará redirigiendo hacia handleBienvenidaIntent");
+    switch (intentHandler) {
+        case 'handleBienvenidaIntent':
+            console.log("Se estará redirigiendo hacia handleBienvenidaIntent");
+            return handleBienvenidaIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleOrdenarIntent':
+            console.log("Se estará redirigiendo hacia handleOrdenarIntent");
+            return handleOrdenarIntent(event, sessionAttributes, userInput);
+        
+        case 'handleAgregarAOrdenarIntent':
+            console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
+            return handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleCancelarOrdenIntent':
+            console.log("Se estará redirigiendo hacia handleCancelarOrdenIntent");
+            return handleCancelarOrdenIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleConsultarMenuIntent':
+            console.log("Se estará redirigiendo hacia handleConsultarMenuIntent");
+            return handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleConsultaPreciosMenuIntent':
+            console.log("Se estará redirigiendo hacia handleConsultaPreciosMenuIntent");
+            return handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleConsultaElementosMenuIntent':
+            console.log("Se estará redirigiendo hacia handleConsultaElementosMenuIntent");
+            return handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleAgradecimientoIntent':
+            console.log("Se estará redirigiendo hacia handleAgradecimientoIntent");
+            return handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleMetodosDePagoIntent':
+            console.log("Se estará redirigiendo hacia handleMetodosDePagoIntent");
+            return handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        case 'handleMetodosDeEnvioIntent':
+            console.log("Se estará redirigiendo hacia handleMetodosDeEnvioIntent");
+            return handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput);
+        
+        default:
+            // Si no se detectan las palabras clave, procedemos con el fallback estándar
+            console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
+            let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
+            console.log("Contenido de fallbackMessage generado desde OpenAI: ", fallbackMessage);
 
-        return handleBienvenidaIntent(event, sessionAttributes, intentInfo, userInput);
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: fallbackMessage.mensaje
+                    }
+                ]
+            };
     }
-
-    if (intentHandler == 'handleOrdenarIntent') {
-        console.log("Se estará redirigiendo hacia handleOrdenarIntent");
-
-        return handleOrdenarIntent(event, sessionAttributes, userInput);
-    }
-
-    if (intentHandler == 'handleAgregarAOrdenarIntent') {
-        console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
-
-        return handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleCancelarOrdenIntent') {
-        console.log("Se estará redirigiendo hacia handleCancelarOrdenIntent");
-
-        return handleCancelarOrdenIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleConsultarMenuIntent') {
-        console.log("Se estará redirigiendo hacia handleConsultarMenuIntent");
-
-        return handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleConsultaPreciosMenuIntent') {
-        console.log("Se estará redirigiendo hacia handleConsultaPreciosMenuIntent");
-
-        return handleConsultaPreciosMenuIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleConsultaElementosMenuIntent') {
-        console.log("Se estará redirigiendo hacia handleConsultaElementosMenuIntent");
-
-        return handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleAgradecimientoIntent') {
-        console.log("Se estará redirigiendo hacia handleAgradecimientoIntent");
-
-        return handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleMetodosDePagoIntent') {
-        console.log("Se estará redirigiendo hacia handleMetodosDePagoIntent");
-
-        return handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    if (intentHandler == 'handleMetodosDeEnvioIntent') {
-        console.log("Se estará redirigiendo hacia handleMetodosDeEnvioIntent");
-
-        return handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput);
-    }
-
-    // Si no se detectan las palabras clave, procedemos con el fallback estándar
-    console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
-    let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
-    console.log("Contenido de fallbackMessage generado desde OpenAI: ", fallbackMessage);
-
-    return {
-        sessionState: {
-            dialogAction: {
-                type: "Close"
-            },
-            intent: {
-                name: event.sessionState.intent.name,
-                state: "Failed"
-            },
-            sessionAttributes: sessionAttributes
-        },
-        messages: [
-            {
-                contentType: "PlainText",
-                content: fallbackMessage.mensaje
-            }
-        ]
-    };
 }
 
 //Funciones para las intenciones
