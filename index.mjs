@@ -46,6 +46,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'AgregarAOrdenIntent') {
+        console.log("Se esta activando esta parte por medio de AgregarAOrdenIntent");
+
+        return handleAgregarAOrdenIntent(event, sessionAttributes, userInput);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -89,7 +96,7 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
     if (intentHandler == 'handleAgregarAOrdenarIntent') {
         console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
 
-        return handleAgregarAOrdenarIntent(event, sessionAttributes, intentInfo, userInput);
+        return handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput);
     }
 
     if (intentHandler == 'handleCancelarOrdenIntent') {
@@ -238,7 +245,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
-        // Verificar si es una orden directa o solo la intención de ordenar
+        // Verificar si es una orden directa 
         const isDirectOrder = await verificarSiEsOrdenDirecta(userInput, menuData);
         console.log("Es orden directa? :", isDirectOrder);
 
@@ -404,12 +411,224 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
 }
 
-async function handleAgregarAOrdenarIntent(event, sessionAttributes, intentInfo, userInput) {
+async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput) {
     console.log('=== Inicio de handleAgregarAOrdenarIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para agregar a la orden");
+
+    // Obtener datos actualizados del menú
+    const menuData = await getMenu();
+
+    // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
+    const tieneOrdenActiva = sessionAttributes.orden &&
+        sessionAttributes.totalUnidades !== undefined &&
+        (sessionAttributes.totalCosto !== undefined);
+
+    console.log("Existe alguna orden activa? :", tieneOrdenActiva);
+
+    if (!tieneOrdenActiva) {
+        console.log("NO se ha encontrado alguna orden activa")
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, no hay una orden activa a la cual agregar elementos. Por favor, primero realiza un pedido."
+                }
+            ]
+        };
+    }
+
+    // Obtener el input del usuario, ya sea del slot o del evento original
+    let inputSlot = event.sessionState.intent.slots?.nuevaOrden?.value?.interpretedValue;
+    console.log("Valor del Input capturado a partir del Slot: ", inputSlot);
+    let inputDirecto =  event.inputTranscript.toLowerCase();
+    console.log("Valor del Input capturado directamente: ", inputDirecto);
+
+    let nuevoInput;
+
+    // Verificar si es una orden directa 
+    const isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
+    console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder);
+
+    if (!isDirectOrder && inputSlot == null) {
+
+        console.log("NO es considerado una orden directa")
+
+        nuevoInput = inputSlot;
+        console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
+
+        let resumenActual = `Tu orden actual incluye: ${sessionAttributes.orden} \n`;
+
+        resumenActual += `\nTotal a pagar: $${sessionAttributes.totalCosto}`;
+
+
+        if (sessionAttributes.comentariosOrden) {
+            resumenActual += `\n\nComentarios:\n${sessionAttributes.comentariosOrden}`;
+        }
+
+        // Preparar los mensajes base
+        const mensajes = [
+            {
+                contentType: "PlainText",
+                content: resumenActual
+            }
+        ];
+
+        // Generar vista organizada del menú
+        const respuesta = await generarVistaMenu(menuData);
+
+        // Agregar mensaje inicial
+        if (respuesta.mensajeInicial) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: "A continuación, te presento el menú:"
+            });
+        }
+
+        // Agregar un mensaje por cada elemento del menú
+        for (const item of respuesta.mensajes) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: item.mensaje
+            });
+        }
+
+        // Agregar mensaje final
+        if (respuesta.mensajeFinal) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: "¿Qué te gustaria agregar a tu orden?"
+            });
+        }
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "ElicitSlot",
+                    slotToElicit: "nuevaOrden"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "InProgress"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: mensajes
+        };
+
+    } else {
+        nuevoInput = inputDirecto;
+    }
+
+    try {
+
+        // Preparar el mensaje para ChatGPT incluyendo la orden actual
+        const ordenActual = {
+            orden: sessionAttributes.orden || "",
+            totalUnidades: sessionAttributes.totalUnidades || 0,
+            totalCosto: sessionAttributes.totalCosto || 0,
+            comentarios: sessionAttributes.comentariosOrden || ""
+        };
+
+        const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual,menuData);
+
+        // Extraer el JSON de la respuesta de ChatGPT
+        const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT");
+        }
+
+        const orderInfo = JSON.parse(jsonMatch[0]);
+
+        // Actualizar las variables de sesión 
+        sessionAttributes.orden = orderInfo.orden;
+        sessionAttributes.totalUnidades = orderInfo.totalUnidades;
+        sessionAttributes.totalCosto = orderInfo.totalCosto;
+        sessionAttributes.comentariosOrden = orderInfo.comentarios;
+
+        console.log("Se han actualizado los atributos de sesión actuales para ordenar gracias a que se añadieron elementos:", JSON.stringify(sessionAttributes, null, 2));
+
+        // Construir los mensajes separados
+        let mensajes = [];
+
+        // Agregar el resumen al primer mensaje
+        mensajes.push({
+            contentType: "PlainText",
+            content: `Tu pedido actualizado es el siguiente:\n\n${orderInfo.orden}`
+        });
+
+        // Agregar el total en un segundo mensaje
+        mensajes.push({
+            contentType: "PlainText",
+            content: `Total a pagar: $${orderInfo.totalCosto}`
+        });
+
+        // Agregar los comentarios como un tercer mensaje, si existen
+        if (orderInfo.comentarios) {
+            mensajes.push({
+                contentType: "PlainText",
+                content: `Comentarios:\n ${orderInfo.comentarios}`
+            });
+        }
+
+        // Mensaje adicional preguntando si necesita más ayuda
+        mensajes.push({
+            contentType: "PlainText",
+            content: "¿Hay algo más en lo que te pueda ayudar?"
+        });
+
+        // Retornar el resultado con los mensajes construidos
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: mensajes
+        };
+
+
+
+    } catch(error){
+
+        console.error("Error al tratar de agregar nuevos elementos a la orden:", error);
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                }
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al tratar de agregar elementos a tu orden. Por favor, intenta de nuevo."
+                }
+            ]
+        };
+
+    }
+
 
 }
 
@@ -1523,46 +1742,29 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
     }
 }
 
-async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual) {
+async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual,menuData) {
 
-    const systemPrompt = `Eres un asistente especializado en tomar órdenes para una pizzería que maneja un menú específico con solo 4 productos:
+    // Convertir precios del menú a números
+    const menuPreprocesado = menuData.map(item => ({
+        ...item,
+        Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
+    }));
 
-    1. Combo 1 ($4.75):
-       - 1 Pizza Personal de 1 ingrediente (Peperoni o Jamón)
-       - Pan con ajo supremo (2 rodajas)
-       - 1 Soda Pepsi de 12 onz.
+    const systemPrompt = `Eres un asistente especializado en tomar órdenes para un restaurante.
+    Tienes acceso al siguiente menú actualizado:
+    ${JSON.stringify(menuPreprocesado, null, 2)}
 
-    2. Banquete 1 ($12.75):
-       - 1 Pizza Gigante de 8 pedazos (Peperoni o Jamón)
-       - Orden de Minipalitroques (6 piezas)
-       - Pan con ajo supremo (4 rodajas)
-       - 1 Soda Pepsi de 1.5 ltrs
+    Tu tarea es añadir elementos a la orden del usuario pero SOLO PUEDES PROCESAR SOLICITUDES RELACIONADAS CON AÑADIR A LA ORDEN QUE SI TENGAN ELEMENTOS QUE ESTEN PRESENTES EN EL MENU QUE SE TE HA COMPARTIDO
 
-    3. Banquete 2 ($17.25):
-       - 2 Pizzas Gigante de 8 pedazos (Peperoni o Jamón)
-       - Orden de Minipalitroques (6 piezas)
-       - Pan con ajo supremo (4 rodajas)
-       - 1 Soda Pepsi de 1.5 ltrs
-
-    4. Banquete 3 ($21.75):
-       - 1 Pizza Super Gigante de 12 pedazos (Peperoni o Jamón)
-       - Orden de Nuditos (6 piezas)
-       - Orden de Salchipanes (6 piezas)
-       - Orden de Alitas (6 piezas)
-       - 1 Soda Pepsi de 1.5 ltrs
-
-    Solo puedes procesar órdenes que incluyan estos productos exactos. Los únicos ingredientes disponibles para las pizzas son Peperoni y Jamón.
+    Solo puedes procesar órdenes que incluyan estos productos exactos. 
+    Y tambien puedes procesar comentarios, los cuales serian cosas extras que pediría el cliente como por ejemplo servilletas o si desea agregar algun ingrediente o quitar y entre otras cosas
     Tu tarea es procesar adiciones a órdenes existentes, sumando las nuevas cantidades a las existentes y tambien en caso se indique, remover elementos de la orden y actualizar la informacion.
-     Y tambien puedes procesar comentarios, los cuales serian cosas extras que pediria el cliente como por ejemplo servilletas y entre otras cosas`;
+    Tambien debes ajustar el total del costo a pagar`;
 
-    const userPrompt = `Analiza el siguiente pedido adicional para una orden de pizzería existente:
+    const userPrompt = `Analiza el siguiente pedido para añadir a una orden existente:
     
     Orden actual:
     - Orden: ${ordenActual.orden}
-    - Combo 1: ${ordenActual.unidadesCombo1} (${ordenActual.ingredienteCombo1})
-    - Banquete 1: ${ordenActual.unidadesBanquete1} (${ordenActual.ingredienteBanquete1})
-    - Banquete 2: ${ordenActual.unidadesBanquete2} (${ordenActual.ingredienteBanquete2})
-    - Banquete 3: ${ordenActual.unidadesBanquete3} (${ordenActual.ingredienteBanquete3})
     - Total unidades actuales: ${ordenActual.totalUnidades}
     - Total costo actual: $${ordenActual.totalCosto}
     - Comentarios actuales: ${ordenActual.comentarios}
@@ -1572,23 +1774,13 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual) {
     
     Debes devolver un objeto JSON exactamente con estas propiedades:
     {
-        "orden": "Solo incluir un resumen conciso del pedido actualizado",
-        "unidadesCombo1": "número TOTAL de Combo 1 (existentes + nuevos)",
-        "ingredienteCombo1": "Especificar ingredientes según estas reglas:
-            - Si no se especifica: 'Peperoni'
-            - Si se pide otro ingrediente que no sea Peperoni o Jamón: 'Pepperoni'
-            - Si son múltiples unidades con mismo ingrediente: 'Todas de Peperoni' o 'Todas de Jamón'
-            - Si son diferentes ingredientes: 'X de Jamón y Y de Peperoni'",
-        "unidadesBanquete1": "número TOTAL de Banquete 1 (existentes + nuevos)",
-        "ingredienteBanquete1": "Aplican las mismas reglas de ingredientes que Combo 1",
-        "unidadesBanquete2": "número TOTAL de Banquete 2 (existentes + nuevos)",
-        "ingredienteBanquete2": "Aplican las mismas reglas de ingredientes que Combo 1",
-        "unidadesBanquete3": "número TOTAL de Banquete 3 (existentes + nuevos)",
-        "ingredienteBanquete3": "Aplican las mismas reglas de ingredientes que Combo 1",
+        "orden": "Al resumen que ya se tenia en ordenActual.orden, agregarle lo que interpretes que se esta agregando a la orden. Usa el mismo formato que ya usa ordenActual.orden",
         "totalUnidades": "suma TOTAL de todas las unidades (existentes + nuevas)",
         "comentarios": "combina los comentarios existentes con los nuevos si los hay",
-        "totalCosto": "cálculo del costo total basado en: Combo 1 = $4.75, Banquete 1 = $12.75, Banquete 2 = $17.25, Banquete 3 = $21.75"
+        "totalCosto": "cálculo del costo total que ya se tenia mas la suma de lo que se acaba de agregar, basado en los precios del menu que se te compartió"
     }
+
+    Realiza el cálculo de manera precisa y sin redondeos adicionales. Respeta los precios exactos del menú compartido.
 
     Solo responde con el objeto JSON, sin texto adicional ni marcadores de código.`;
 
@@ -1635,23 +1827,30 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual) {
 async function verificarSiEsOrdenDirecta(userInput) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en analizar si un texto contiene una orden directa para ordenar 
-        algo.
+        const systemPrompt = `Eres un asistente especializado en analizar si un texto contiene una orden directa para ordenar o añadir algo.
 
-        Debes verificar si el texto se considera o ni como una orden directa.
-        
+        Debes verificar si el texto se considera o no como una orden directa.
+
         Para saber si es directa o no, ten en cuenta lo siguiente:
 
-        Si el texto que vas a analizar tiene más de 16 caracteres(tambien se cuentan los espacios), entonces se considera como una orden directa.
-        Tambien considera en sí, el contenido del texto. Un ejemplo seria un texto como "hola me gustaria ordenar por favor".Si bien 
-        tiene mas de 16 caracteres, no se debe de considerar como orden directa ya que en ningun momento esta mencionando algo que quiera ordenar, solo
-        tiene la intencion de ordenar, por lo cual, NO ES ORDEN DIRECTA.
+        1. **Se considera una orden directa si:**
+            - El texto tiene más de 16 caracteres (incluyendo espacios).
+            - El contenido del texto especifica directamente algo que se desea ordenar o añadir/agregar. 
+            Ejemplo: 
+            - "Me gustaría añadir unas papas" (ORDEN DIRECTA porque especifica qué añadir).
+            - "Quiero ordenar una pizza" (ORDEN DIRECTA porque menciona directamente el elemento a ordenar).
 
-        Se considera orden directa si tiene mas de 16 caracteres  y si directamente en el input se esta mencionando algo que quiera ordenar.
-        Si se pasan de los 16 caracteres pero en el input no indica algo a ordenar y solo denota la intencion, entonces NO ES ORDEN DIRECTA
+        2. **No se considera una orden directa si:**
+            - El texto solo denota una intención general sin especificar lo que se desea ordenar o añadir/agregar.
+            Ejemplo:
+            - "Hola, me gustaría añadir algo a mi orden" (NO ES ORDEN DIRECTA porque no especifica qué añadir).
+            - "Hola, me gustaría ordenar por favor" (NO ES ORDEN DIRECTA porque no menciona qué ordenar).
 
-        Si no se cumplen las condiciones mencionadas, entonces NO ES UNA ORDEN DIRECTA
-        `;
+        3. **Si no se cumplen las condiciones anteriores, entonces NO ES UNA ORDEN DIRECTA.**
+
+        Se flexible y acepta sinonimos de palabras para ordenar o añadir/agregar algo a la orden.
+
+        Sé riguroso y responde basándote estrictamente en estas condiciones.`;
 
         const userPrompt = `Analiza el siguiente texto y determina si es una orden directa o no:
         "${userInput}"
