@@ -828,15 +828,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     try {
 
         // Preparar los datos para el registro
-        const fechaHora = new Date().toLocaleString('es-MX', {
-            timeZone: 'America/Mexico_City',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
+        const fechaHora = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}:${String(new Date().getSeconds()).padStart(2, '0')}`;
 
         console.log("Preparando datos para registro en Google Sheets:");
 
@@ -876,7 +868,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
             console.log("Resultado del registro en Google Sheets:", JSON.stringify(response, null, 2));
 
 
-        } catch (error) {
+        } catch (registroError) {
 
             console.error("Error al intentar registrar la orden en Google Sheets:", registroError);
 
