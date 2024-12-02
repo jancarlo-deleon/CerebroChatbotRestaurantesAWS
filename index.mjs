@@ -697,7 +697,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
                 direccionEntrega: openAIResponse.direccionEntrega
             };
 
-            console.log("Mapping de slots a actualizar:", slotMapping); 
+            console.log("Mapping de slots a actualizar:", slotMapping);
 
             // Actualizar solo los slots que tienen valor en la respuesta de OpenAI
             for (const [slotName, value] of Object.entries(slotMapping)) {
@@ -714,7 +714,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
                     console.log(`Slot ${slotName} no tiene valor en la respuesta de OpenAI`);
                 }
             }
-            
+
             console.log("Slots actualizados después de OpenAI:", JSON.stringify(slots, null, 2));
 
         } else {
@@ -746,7 +746,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     for (const slotName of requiredSlots) {
         if (!isSlotComplete(slotName)) {
             console.log(`Solicitando información para slot: ${slotName}`);
-            
+
             // Crear el mensaje apropiado según el slot
             let messages = [];
             if (slotName === 'nombreCliente') {
@@ -805,6 +805,8 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     const numeroOrden = Math.floor(Math.random() * 9000) + 1000; // Genera número entre 1000 y 9999
     console.log("Número de orden generado:", numeroOrden);
 
+    sessionAttributes.numeroOrden = numeroOrden;
+
     // Crear mensaje de resumen
     const mensajeResumen = `
     Tu orden es la #${numeroOrden} \n
@@ -820,6 +822,71 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
     // Limpiar todas las variables de sesión
     console.log("\n=== FINALIZANDO ORDEN ===");
+
+    console.log("\n==== PREPARANDO REGISTRO EN GOOGLE SHEETS ====");
+
+    try {
+
+        // Preparar los datos para el registro
+        const fechaHora = new Date().toLocaleString('es-MX', {
+            timeZone: 'America/Mexico_City',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+
+        console.log("Preparando datos para registro en Google Sheets:");
+
+        // Preparar el objeto de nueva orden
+        const nuevaOrden = {
+            "No. Orden": sessionAttributes.numeroOrden || 'N/A',
+            "Fecha y Hora": fechaHora,
+            "Cliente": slots.nombreCliente?.value?.interpretedValue || 'N/A',
+            "Numero de Telefono": slots.telefonoCliente?.value?.interpretedValue || 'N/A',
+            "Elementos Ordenados": sessionAttributes.orden || 'N/A',
+            "Direccion": slots.direccionEntrega?.value?.interpretedValue || 'N/A',
+            "Metodo de Pago": slots.metodoPago?.value?.interpretedValue || 'N/A',
+            "Total": sessionAttributes.totalCosto || 'N/A',
+            "Estado": "Pendiente",
+            "Observaciones": sessionAttributes.comentariosOrden || 'Sin comentarios'
+        };
+
+        console.log("Datos de nueva orden a registrar:", JSON.stringify(nuevaOrden, null, 2));
+
+        // Realizar el registro en Google Sheets
+        try {
+
+            console.log("Iniciando registro de orden en Google Sheets");
+            const response = await registrarOrden(
+                nuevaOrden["No. Orden"],
+                nuevaOrden["Fecha y Hora"],
+                nuevaOrden["Cliente"],
+                nuevaOrden["Numero de Telefono"],
+                nuevaOrden["Elementos Ordenados"],
+                nuevaOrden["Direccion"],
+                nuevaOrden["Metodo de Pago"],
+                nuevaOrden["Total"],
+                nuevaOrden["Estado"],
+                nuevaOrden["Observaciones"]
+            );
+
+            console.log("Resultado del registro en Google Sheets:", JSON.stringify(response, null, 2));
+
+
+        } catch (error) {
+
+            console.error("Error al intentar registrar la orden en Google Sheets:", registroError);
+
+        }
+
+    } catch (error) {
+        console.error("Error general al preparar el registro de orden:", error);
+    }
+
+    console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
 
     sessionAttributes = {};
     console.log("Variables de sesión limpiadas");
@@ -1407,7 +1474,7 @@ export async function getMenu() {
     }
 }
 
-export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elementos, direccion, metodoPago, estado, observaciones) {
+export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elementos, direccion, metodoPago, totalCosto, estado, observaciones) {
     console.log("Iniciando registro de nueva orden en la hoja 'ORDENES'");
 
     const nuevaOrden = {
@@ -1418,6 +1485,7 @@ export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elem
         "Elementos Ordenados": elementos,
         "Direccion": direccion,
         "Metodo de Pago": metodoPago,
+        "Total": totalCosto,
         "Estado": estado,
         "Observaciones": observaciones
     };
