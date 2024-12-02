@@ -60,6 +60,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'FinalizarOrdenIntent') {
+        console.log("Se esta activando esta parte por medio de FinalizarOrdenIntent");
+
+        return handleFinalizarOrdenIntent(event, sessionAttributes);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -100,6 +107,10 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
         case 'handleAgregarAOrdenarIntent':
             console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
             return handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput);
+
+        case 'handleFinalizarOrdenIntent':
+            console.log("Se estará redirigiendo hacia handleFinalizarOrdenIntent");
+            return handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo, userInput);
 
         case 'handleCancelarOrdenIntent':
             console.log("Se estará redirigiendo hacia handleCancelarOrdenIntent");
@@ -619,6 +630,236 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
     }
 
+
+}
+
+async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) {
+    console.log('=== Inicio de handleFinalizarOrdenIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
+    console.log("Preparando respuesta para finalizar orden");
+
+    // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
+    const tieneOrdenActiva = sessionAttributes.orden &&
+        sessionAttributes.totalUnidades !== undefined &&
+        (sessionAttributes.totalCosto !== undefined);
+
+    console.log("Existe alguna orden activa? :", tieneOrdenActiva);
+
+    if (!tieneOrdenActiva) {
+        console.log("NO se ha encontrado alguna orden activa")
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, no hay una orden activa para poder finalizarla. Por favor, primero realiza un pedido."
+                }
+            ]
+        };
+    }
+
+    // Obtener slots actuales
+    console.log("\n=== SLOTS INICIALES ===");
+    let slots = event.sessionState.intent.slots || {};
+    console.log("Slots actuales:", JSON.stringify(slots, null, 2));
+
+    let inputUsuario = event.inputTranscript.toLowerCase();
+
+    // Procesar input con OpenAI si existe un input inicial
+    console.log("\n=== PROCESAMIENTO CON OPENAI ===");
+
+    if (inputUsuario) {
+
+        console.log("Procesando input para extraer información de envío:", event.inputTranscript);
+        const openAIResponse = await extraerInformacionEnvioCliente(event.inputTranscript);
+
+        console.log("Se ha extraido la información del cliente: ", openAIResponse)
+
+        // Actualizar solo los slots que OpenAI haya devuelto valores
+        if (openAIResponse) {
+
+            console.log("Iniciando actualización de slots con respuesta de OpenAI");
+            const slotMapping = {
+                nombreCliente: openAIResponse.nombreCliente,
+                telefonoCliente: openAIResponse.telefonoCliente,
+                metodoPago: openAIResponse.metodoPago,
+                direccionEntrega: openAIResponse.direccionEntrega
+            };
+
+            console.log("Mapping de slots a actualizar:", slotMapping); 
+
+            // Actualizar solo los slots que tienen valor en la respuesta de OpenAI
+            for (const [slotName, value] of Object.entries(slotMapping)) {
+                if (value) {
+                    console.log(`Actualizando slot ${slotName} con valor: ${value}`);
+                    slots[slotName] = {
+                        value: {
+                            originalValue: value,
+                            interpretedValue: value,
+                            resolvedValues: [value]
+                        }
+                    };
+                } else {
+                    console.log(`Slot ${slotName} no tiene valor en la respuesta de OpenAI`);
+                }
+            }
+            
+            console.log("Slots actualizados después de OpenAI:", JSON.stringify(slots, null, 2));
+
+        } else {
+            console.log("No se recibió respuesta válida de OpenAI");
+        }
+
+    } else {
+        console.log("No hay input del usuario para procesar para extraer información de envío");
+    }
+
+    // Función auxiliar para verificar si un slot está completo
+    const isSlotComplete = (slotName) => {
+        const isComplete = slots[slotName] &&
+            slots[slotName].value &&
+            slots[slotName].value.interpretedValue;
+        console.log(`Verificando slot ${slotName}: ${isComplete ? 'Completo' : 'Incompleto'}`);
+        return isComplete;
+    };
+
+    console.log("\n=== VERIFICACIÓN DE SLOTS REQUERIDOS ===");
+    // Verificar cada slot requerido y solicitar el primero que falte
+    const requiredSlots = [
+        'nombreCliente',
+        'telefonoCliente',
+        'metodoPago',
+        'direccionEntrega'
+    ];
+
+    for (const slotName of requiredSlots) {
+        if (!isSlotComplete(slotName)) {
+            console.log(`Solicitando información para slot: ${slotName}`);
+            
+            // Crear el mensaje apropiado según el slot
+            let messages = [];
+            if (slotName === 'nombreCliente') {
+                messages = [{
+                    contentType: "PlainText",
+                    content: "¿Cuál es el nombre de quien recibirá la orden?"
+                }];
+            } else if (slotName === 'telefonoCliente') {
+                messages = [{
+                    contentType: "PlainText",
+                    content: "¿Cuál sería el número de teléfono?"
+                }];
+            } else if (slotName === 'metodoPago') {
+                messages = [{
+                    contentType: "PlainText",
+                    content: "¿Cuál será tu método de pago?"
+                }];
+            } else if (slotName === 'direccionEntrega') {
+                messages = [
+                    {
+                        contentType: "PlainText",
+                        content: "Contamos con entregas a domicilio GRATIS en el perímetro de la ciudad y también puedes pasar a recoger tu pedido a nuestro establecimiento."
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: "¿Cómo te gustaria manejar la entrega de tu orden?"
+                    }
+                ];
+            }
+
+            // Retornar la respuesta con el intent correcto
+            const response = {
+                sessionState: {
+                    dialogAction: {
+                        type: "ElicitSlot",
+                        slotToElicit: slotName
+                    },
+                    intent: {
+                        name: "FinalizarOrdenIntent",
+                        slots: slots,
+                        state: "InProgress"
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: messages
+            };
+
+            console.log("Respuesta ElicitSlot generada:", JSON.stringify(response, null, 2));
+            return response;
+        }
+    }
+
+    console.log("\n=== GENERANDO RESUMEN DE ORDEN ===");
+
+    // Generar número de orden aleatorio
+    const numeroOrden = Math.floor(Math.random() * 9000) + 1000; // Genera número entre 1000 y 9999
+    console.log("Número de orden generado:", numeroOrden);
+
+    // Crear mensaje de resumen
+    const mensajeResumen = `
+    Tu orden es la #${numeroOrden} \n
+    
+    • Nombre de quien recibe: ${slots.nombreCliente.value.interpretedValue} \n
+    • Número de Teléfono: ${slots.telefonoCliente.value.interpretedValue} \n
+    • Entrega: ${slots.direccionEntrega.value.interpretedValue} \n
+    • Orden: ${sessionAttributes.orden} \n
+    • Comentarios: ${sessionAttributes.comentariosOrden || 'Sin comentarios'} \n
+    • Método de pago: ${slots.metodoPago.value.interpretedValue} \n
+    • Total a pagar: $${sessionAttributes.totalCosto}
+    `;
+
+    // Limpiar todas las variables de sesión
+    console.log("\n=== FINALIZANDO ORDEN ===");
+
+    sessionAttributes = {};
+    console.log("Variables de sesión limpiadas");
+
+    // Retornar respuesta final
+    const finalResponse = {
+        sessionState: {
+            dialogAction: {
+                type: "Close"
+            },
+            intent: {
+                name: event.sessionState.intent.name,
+                state: "Fulfilled"
+            },
+            sessionAttributes: sessionAttributes
+        },
+        messages: [
+            {
+                contentType: "PlainText",
+                content: mensajeResumen
+            },
+            {
+                contentType: "PlainText",
+                content: "Tu pedido estará listo entre 25 a 30 minutos."
+            },
+            {
+                contentType: "PlainText",
+                content: "Muchas gracias por tu preferencia."
+            },
+            {
+                contentType: "PlainText",
+                content: "Estoy a la orden para apoyarte cuando se te ofrezca."
+            }
+        ]
+    };
+
+    console.log("Respuesta final:", JSON.stringify(finalResponse, null, 2));
+    console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
+
+    return finalResponse;
 
 }
 
@@ -1242,6 +1483,22 @@ async function interpretarIntent(userInput) {
     10. Metodos de Envío
         - INCLUYE: Consultas sobre delivery o recojo
         - EJEMPLOS: "hacen delivery", "puedo recoger", "cómo me lo envían"
+    
+    11. Finalizar Orden
+    - INCLUYE: 
+      * Solicitudes explícitas de terminar el pedido
+      * Indicaciones de que el pedido está completo
+      * Frases que sugieren conclusión del proceso de pedido
+      * Menciones de la intencion de querer pagar o confirmar la orden
+      * Expresiones que impliquen que no se desean más items
+    - EJEMPLOS: 
+      * "solo eso, gracias"
+      * "quiero finalizar mi orden" 
+      * "eso seria todo"
+      * "me gustaria pagar"
+      * "listo para pagar"
+      * "confirmar pedido"
+      * "estoy listo para pagar"
 
     REGLAS CRÍTICAS DE CATEGORIZACIÓN:
 
@@ -1250,10 +1507,14 @@ async function interpretarIntent(userInput) {
     3. Cualquier consulta ambigua o que no encaje perfectamente en una categoría debe ser marcada como inválida.
     4. Las preguntas sobre promociones, ofertas o recomendaciones NO deben categorizarse como consultas de menú.
     5. Solo categorizar como "Ordenar" cuando hay una intención EXPLÍCITA de realizar un pedido.
-    6. Ante la duda, preferir marcar como categoría inválida que forzar una categorización incorrecta.
+    6. CONTEXTO Y SEMÁNTICA:
+        - Analizar no solo palabras individuales, sino el contexto y la intención general
+        - Prestar especial atención a frases que impliquen conclusión del proceso de pedido
 
-    IMPORTANTE: Si el input no coincide EXACTAMENTE con alguna de estas categorías o existe alguna ambigüedad, 
-    debes marcarlo como categoría inválida. Es mejor rechazar una categorización dudosa que asignarla incorrectamente.`;
+
+    IMPORTANTE: 
+        - Evaluar holísticamente la intención del usuario
+        - Priorizar la categoría que mejor capture el propósito final de la comunicación`;
 
     const userPrompt = `Analiza el siguiente input y categorízalo según las reglas estrictas definidas:
     "${userInput}"
@@ -1274,6 +1535,7 @@ async function interpretarIntent(userInput) {
         - Agradecimiento -> handleAgradecimientoIntent
         - Metodos de Pago -> handleMetodosDePagoIntent
         - Metodos de Envío -> handleMetodosDeEnvioIntent
+        - Finalizar Orden -> handleFinalizarOrdenIntent
     }
 
     Para categorías inválidas:
@@ -2165,7 +2427,7 @@ async function verificarConfirmacion(userInput) {
 async function extraerInformacionEnvioCliente(userInput) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en extraer información de pedidos para una pizzería.
+        const systemPrompt = `Eres un asistente especializado en extraer información de pedidos para un restaurante.
         Debes analizar el texto del cliente y extraer la siguiente información si está presente:
         - Nombre del cliente
         - Número de teléfono
@@ -2205,7 +2467,10 @@ async function extraerInformacionEnvioCliente(userInput) {
             }
         });
 
-        console.log("Respuesta de OpenAI:", JSON.stringify(response.data, null, 2));
+        console.log("Respuesta de ChatGPT para extraer información de envío:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
 
         const jsonMatch = response.data.choices[0].message.content.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
