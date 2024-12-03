@@ -275,7 +275,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                     messages: [
                         {
                             contentType: "PlainText",
-                            content: "¿Qué elementos del menú te gustaría ordenar?"
+                            content: "¿Qué te gustaría ordenar?"
                         }
                     ]
                 };
@@ -315,7 +315,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                     },
                     {
                         contentType: "PlainText",
-                        content: "Puedes consultar el menú para conocer nuestros combos y banquetes."
+                        content: "Puedes consultar el menú para poder hacer tu orden."
                     }
                 ]
             };
@@ -1698,10 +1698,16 @@ async function generarMensajeFallback(userInput, intentInfo) {
 
 async function generarMensajeBienvenida(userInput) {
 
+    let contextoRestaurante = await getInicio();
+
     const systemPrompt = `
     Eres un chatbot amigable para un restaurante. Tu tarea es generar mensajes de bienvenida cálidos y acogedores.
     Debes mencionar que puedes ayudar a tomar pedidos y responder preguntas sobre el menú.
     Las respuestas deben ser breves pero acogedoras.
+
+    Y basate en la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
+
+    La cual es la del restaurante al cual estas apoyando. Basa tu respuesta para que este en sincronía con el tipo de restaurante.
 
     Formato de respuesta:
     {
@@ -1831,7 +1837,7 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
     ${JSON.stringify(menuData, null, 2)}
 
     Tu tarea es:
-    1. Responder preguntas específicas sobre elementos del menú
+    1. Responder preguntas específicas sobre l menú
     2. Ser flexible con la escritura/ortografía de los nombres de los platillos
     3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir algo similar del menú disponible
     4. NO listar el menú completo, solo responder sobre los elementos específicos por los que se pregunta
@@ -1943,8 +1949,12 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
 }
 
 async function generarMensajeAgradecimiento(userInput) {
+
+    let contextoRestaurante = await getInicio();
+
     const systemPrompt = `
-    Eres un chatbot amable para un restaurante. Tu tarea es generar respuestas variadas y amigables a los agradecimientos de los clientes.
+    Eres un chatbot amable para un restaurante. El restaurante tiene la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
+    Tu tarea es generar respuestas variadas y amigables a los agradecimientos de los clientes.
     Las respuestas deben ser breves, cordiales y mantener un tono positivo.
 
     Formato de respuesta:
