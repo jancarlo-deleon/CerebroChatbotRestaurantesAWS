@@ -246,11 +246,22 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
+        // Verificar si hay un elemento previo guardado en la sesión
+        const elementoPrevio = sessionAttributes.orden;
+        console.log("Existe elemento previo? :", elementoPrevio)
+
+        if (elementoPrevio) {
+            
+            console.log("Detectada orden contextual basada en consulta previa");
+            userInput = elementoPrevio + userInput;
+            console.log("El input a procesar quedaria de la siguiente manera: ", userInput);
+        }
+
         // Verificar si es una orden directa 
         const isDirectOrder = await verificarSiEsOrdenDirecta(userInput, menuData);
         console.log("Es orden directa? :", isDirectOrder);
 
-        if (!isDirectOrder) {
+        if (!isDirectOrder && !elementoPrevio) {
             console.log("No es una orden directa. Se verificará el slot 'ordenUsuario'.");
 
             // Verificar si el slot 'ordenUsuario' tiene valor
@@ -1154,6 +1165,12 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
         // Generar respuesta personalizada sobre precios
         const respuesta = await generarRespuestaPreciosMenu(userInput, menuData);
 
+        console.log("Valor de la respuesta obtenida:",respuesta)
+
+        sessionAttributes.orden = respuesta.nombreElemento;
+
+        console.log("Se ha actualiazdo las variables de sesion actuales:",JSON.stringify(sessionAttributes, null, 2));
+
         return {
             sessionState: {
                 dialogAction: {
@@ -1209,6 +1226,12 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
 
         // Generar respuesta personalizada basada en la consulta del usuario
         const respuesta = await generarRespuestaElementoMenu(userInput, menuData);
+
+        console.log("Valor de la respuesta obtenida:",respuesta)
+
+        sessionAttributes.orden = respuesta.nombreElemento;
+
+        console.log("Se ha actualiazdo las variables de sesion actuales:",JSON.stringify(sessionAttributes, null, 2));
 
         return {
             sessionState: {
@@ -1845,7 +1868,8 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
 
     Formato de respuesta:
     {
-        "mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado"
+        "mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado",
+        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)"
     }
     `;
 
@@ -1905,6 +1929,7 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
     Formato de respuesta:
     {
         "mensaje": "Tu respuesta aquí, mencionando solo los precios de los elementos consultados"
+        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)"
     }
     `;
 
