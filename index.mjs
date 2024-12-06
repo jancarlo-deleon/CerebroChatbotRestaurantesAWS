@@ -81,6 +81,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'VisualizarIntent') {
+        console.log("Se esta activando esta parte por medio de VisualizarIntent");
+
+        return handleVisualizarIntent(event, sessionAttributes, userInput);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -153,6 +160,9 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
         case 'handleMetodosDeEnvioIntent':
             console.log("Se estará redirigiendo hacia handleMetodosDeEnvioIntent");
             return handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput);
+
+        case 'handleVisualizarIntent':
+            return handleVisualizarIntent(event, sessionAttributes, userInput);
 
         default:
             // Si no se detectan las palabras clave, procedemos con el fallback estándar
@@ -1473,6 +1483,115 @@ async function handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, 
 
 }
 
+async function handleVisualizarIntent(event, sessionAttributes, userInput) {
+    console.log('=== Inicio de handleVisualizar ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
+    console.log("Preparando respuesta para visualizar elemento del menú");
+
+    try {
+        // Verificar si existe un orden en las variables de sesión
+        if (!sessionAttributes.orden) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Lo siento, no hay un elemento de menú seleccionado para visualizar. Por favor, primero consulta un elemento del menú."
+                    }
+                ]
+            };
+        }
+
+        // Obtener datos de imágenes
+        const imagenesData = await getImagenes();
+
+        // Buscar la imagen que coincida parcialmente con el nombre del orden
+        const imagenElemento = imagenesData.find(imagen => 
+            imagen.Nombre.toLowerCase().includes(sessionAttributes.orden.toLowerCase())
+        );
+
+        // Si no se encuentra imagen
+        if (!imagenElemento) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: `Lo siento, no se encontró una imagen para ${sessionAttributes.orden}.`
+                    }
+                ]
+            };
+        }
+
+        // Preparar respuesta con imagen
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: `Aquí tienes una imagen de ${sessionAttributes.orden}:`
+                },
+                {
+                    contentType: "ImageResponseCard",
+                    imageResponseCard: {
+                        title: imagenElemento.Nombre,
+                        imageUrl: imagenElemento.Link,
+    
+                    }
+                }
+            ]
+        };
+    } catch (error) {
+        console.error("Error al procesar la visualización del elemento del menú:", error);
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                }
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al buscar la imagen del elemento del menú. Por favor, intenta nuevamente en unos momentos."
+                }
+            ]
+        };
+    }
+}
+
+
 //Metodos para usar sheet.best
 async function getInicio() {
     console.log("Iniciando consulta a la hoja 'INICIO'");
@@ -1629,6 +1748,10 @@ async function interpretarIntent(userInput) {
       * "listo para pagar"
       * "confirmar pedido"
       * "estoy listo para pagar"
+    
+    12. Visualizar Elemento del Menu
+        - INCLUYE: Deseo del cliente de querer ver/visualizar una foto/imagen del elemento del menu
+        - EJEMPLOS: "me lo puedes mostrar", "quiero ver como es la pizza", "puedo ver fotos?"
 
     REGLAS CRÍTICAS DE CATEGORIZACIÓN:
 
@@ -1665,6 +1788,7 @@ async function interpretarIntent(userInput) {
         - Metodos de Pago -> handleMetodosDePagoIntent
         - Metodos de Envío -> handleMetodosDeEnvioIntent
         - Finalizar Orden -> handleFinalizarOrdenIntent
+        - Visualizar Elemento del Menu -> handleVisualizarIntent
     }
 
     Para categorías inválidas:
