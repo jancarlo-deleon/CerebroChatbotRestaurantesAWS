@@ -1491,34 +1491,32 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
     console.log("Preparando respuesta para visualizar elemento del menú");
 
     try {
-        // Verificar si existe un orden en las variables de sesión
-        if (!sessionAttributes.orden) {
-            return {
-                sessionState: {
-                    dialogAction: {
-                        type: "Close"
-                    },
-                    intent: {
-                        name: event.sessionState.intent.name,
-                        state: "Failed"
-                    }
-                },
-                messages: [
-                    {
-                        contentType: "PlainText",
-                        content: "Lo siento, no hay un elemento de menú seleccionado para visualizar. Por favor, primero consulta un elemento del menú."
-                    }
-                ]
-            };
-        }
+        
+        // Obtener datos actualizados del menú
+        const menuData = await getMenu();
+
+        // Generar respuesta personalizada basada en la consulta del usuario
+        const respuestaElementoMenu = await generarRespuestaElementoMenu(userInput, menuData);
 
         // Obtener datos de imágenes
         const imagenesData = await getImagenes();
 
-        // Buscar la imagen que coincida parcialmente con el nombre del orden
-        const imagenElemento = imagenesData.find(imagen => 
-            imagen.Nombre.toLowerCase().includes(sessionAttributes.orden.toLowerCase())
-        );
+        let imagenElemento;
+
+        if (sessionAttributes.orden) {
+            // Buscar la imagen que coincida parcialmente con el nombre del orden de atributo de sesion
+            imagenElemento = imagenesData.find(imagen =>
+                imagen.Nombre.toLowerCase().includes(sessionAttributes.orden.toLowerCase())
+            );
+            console.log("Valor de imagenElemento usando orden de atributo de sesion:",imagenElemento);
+        } else {
+            // Buscar la imagen que coincida parcialmente con el nombre procesado del input
+            imagenElemento = imagenesData.find(imagen =>
+                imagen.Nombre.toLowerCase().includes(respuestaElementoMenu.nombreElemento.toLowerCase())
+            );
+            console.log("Valor de imagenElemento usando nombre procesado del input:",imagenElemento);
+        }
+
 
         // Si no se encuentra imagen
         if (!imagenElemento) {
@@ -1556,14 +1554,14 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
             messages: [
                 {
                     contentType: "PlainText",
-                    content: `Aquí tienes una imagen de ${sessionAttributes.orden}:`
+                    content: `Aquí tienes una imagen de referencia:`
                 },
                 {
                     contentType: "ImageResponseCard",
                     imageResponseCard: {
                         title: imagenElemento.Nombre,
                         imageUrl: imagenElemento.Link,
-    
+
                     }
                 }
             ]
@@ -2032,7 +2030,7 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
     ${JSON.stringify(menuData, null, 2)}
 
     Tu tarea es:
-    1. Responder preguntas específicas sobre l menú
+    1. Responder preguntas específicas sobre el menú
     2. Ser flexible con la escritura/ortografía de los nombres de los platillos
     3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir algo similar del menú disponible
     4. NO listar el menú completo, solo responder sobre los elementos específicos por los que se pregunta
