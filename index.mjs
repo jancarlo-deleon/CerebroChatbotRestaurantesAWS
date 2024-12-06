@@ -67,6 +67,20 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'MenuIntent') {
+        console.log("Se esta activando esta parte por medio de MenuIntent");
+
+        handleConsultarMenuIntent(event, sessionAttributes, userInput);
+
+    }
+
+    if (intentName == 'GraciasIntent') {
+        console.log("Se esta activando esta parte por medio de GraciasIntent");
+
+        return handleAgradecimientoIntent(event, sessionAttributes, userInput);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -130,7 +144,7 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
 
         case 'handleAgradecimientoIntent':
             console.log("Se estará redirigiendo hacia handleAgradecimientoIntent");
-            return handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput);
+            return handleAgradecimientoIntent(event, sessionAttributes, userInput);
 
         case 'handleMetodosDePagoIntent':
             console.log("Se estará redirigiendo hacia handleMetodosDePagoIntent");
@@ -251,7 +265,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         console.log("Existe elemento previo? :", elementoPrevio)
 
         if (elementoPrevio) {
-            
+
             console.log("Detectada orden contextual basada en consulta previa");
             userInput = elementoPrevio + userInput;
             console.log("El input a procesar quedaria de la siguiente manera: ", userInput);
@@ -498,32 +512,40 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
             }
         ];
 
-        // Generar vista organizada del menú
-        const respuesta = await generarVistaMenu(menuData);
+        // Obtener datos de imágenes
+        const imagenesData = await getImagenes();
+
+        // Buscar la imagen específica para el menú
+        const imagenMenu = imagenesData.find(imagen => imagen.Nombre === "Menu");
+        console.log("Contenido de imagenMenu:", imagenMenu);
 
         // Agregar mensaje inicial
-        if (respuesta.mensajeInicial) {
-            mensajes.push({
-                contentType: "PlainText",
-                content: "A continuación, te presento el menú:"
-            });
-        }
+        mensajes.push({
+            contentType: "PlainText",
+            content: "A continuación, te presento el menú:"
+        });
 
-        // Agregar un mensaje por cada elemento del menú
-        for (const item of respuesta.mensajes) {
+
+        //Agregar imagen del menú
+        if (imagenMenu) {
+            console.log("La imagen del menu existe, se estará agregando la misma al mensaje.");
             mensajes.push({
-                contentType: "PlainText",
-                content: item.mensaje
+                contentType: "ImageResponseCard",
+                imageResponseCard: {
+                    title: "Nuestro Menú",
+                    imageUrl: imagenMenu.Link,
+
+                }
             });
+            console.log("Imagen agregada correctamente a la respuesta");
         }
 
         // Agregar mensaje final
-        if (respuesta.mensajeFinal) {
-            mensajes.push({
-                contentType: "PlainText",
-                content: "¿Qué te gustaria agregar a tu orden?"
-            });
-        }
+        mensajes.push({
+            contentType: "PlainText",
+            content: "¿Qué te gustaria agregar a tu orden?"
+        });
+
 
         return {
             sessionState: {
@@ -1073,7 +1095,7 @@ async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo) {
 
 }
 
-async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, userInput) {
+async function handleConsultarMenuIntent(event, sessionAttributes, userInput) {
     console.log('=== Inicio de handleConsultarMenuIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
@@ -1081,38 +1103,45 @@ async function handleConsultarMenuIntent(event, sessionAttributes, intentInfo, u
     console.log("Preparando respuesta para mostrar menú completo");
 
     try {
-        // Obtener datos actualizados del menú
-        const menuData = await getMenu();
 
-        // Generar vista organizada del menú
-        const respuesta = await generarVistaMenu(menuData);
+        // Obtener datos de imágenes
+        const imagenesData = await getImagenes();
+
+        // Buscar la imagen específica para el menú
+        const imagenMenu = imagenesData.find(imagen => imagen.Nombre === "Menu");
+        console.log("Contenido de imagenMenu:", imagenMenu);
+        console.log("Tipo de imagenMenu", typeof imagenMenu);
 
         // Preparar array de mensajes
         const mensajes = [];
 
         // Agregar mensaje inicial
-        if (respuesta.mensajeInicial) {
-            mensajes.push({
-                contentType: "PlainText",
-                content: respuesta.mensajeInicial
-            });
-        }
+        mensajes.push({
+            contentType: "PlainText",
+            content: "Aquí te comparto nuestro menú:"
+        });
 
-        // Agregar un mensaje por cada elemento del menú
-        for (const item of respuesta.mensajes) {
+        //Agregar imagen del menú
+        if (imagenMenu) {
+            console.log("La imagen del menu existe, se estará agregando la misma al mensaje.");
             mensajes.push({
-                contentType: "PlainText",
-                content: item.mensaje
+                contentType: "ImageResponseCard",
+                imageResponseCard: {
+                    title: "Nuestro Menú",
+                    imageUrl: imagenMenu.Link,
+
+                }
             });
+            console.log("Imagen agregada correctamente a la respuesta");
         }
 
         // Agregar mensaje final
-        if (respuesta.mensajeFinal) {
-            mensajes.push({
-                contentType: "PlainText",
-                content: respuesta.mensajeFinal
-            });
-        }
+        mensajes.push({
+            contentType: "PlainText",
+            content: "¿Te gustaría ordenar algo o tienes alguna pregunta sobre nuestros platillos?"
+        });
+
+
 
         return {
             sessionState: {
@@ -1165,11 +1194,11 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
         // Generar respuesta personalizada sobre precios
         const respuesta = await generarRespuestaPreciosMenu(userInput, menuData);
 
-        console.log("Valor de la respuesta obtenida:",respuesta)
+        console.log("Valor de la respuesta obtenida:", respuesta)
 
         sessionAttributes.orden = respuesta.nombreElemento;
 
-        console.log("Se ha actualiazdo las variables de sesion actuales:",JSON.stringify(sessionAttributes, null, 2));
+        console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
 
         return {
             sessionState: {
@@ -1227,11 +1256,11 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
         // Generar respuesta personalizada basada en la consulta del usuario
         const respuesta = await generarRespuestaElementoMenu(userInput, menuData);
 
-        console.log("Valor de la respuesta obtenida:",respuesta)
+        console.log("Valor de la respuesta obtenida:", respuesta)
 
         sessionAttributes.orden = respuesta.nombreElemento;
 
-        console.log("Se ha actualiazdo las variables de sesion actuales:",JSON.stringify(sessionAttributes, null, 2));
+        console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
 
         return {
             sessionState: {
@@ -1276,7 +1305,7 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
     }
 }
 
-async function handleAgradecimientoIntent(event, sessionAttributes, intentInfo, userInput) {
+async function handleAgradecimientoIntent(event, sessionAttributes, userInput) {
     console.log('=== Inicio de handleAgradecimientoIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
@@ -1489,6 +1518,24 @@ export async function getMenu() {
     }
 }
 
+export async function getImagenes() {
+    console.log("Iniciando consulta a la hoja 'IMAGENES'");
+
+    try {
+        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/IMAGENES`);
+        console.log("Respuesta completa de la hoja 'IMAGENES':", response.data);
+
+        // Obtener datos de la hoja de imágenes
+        const imagenes = response.data;
+        console.log("Links de imágenes:", imagenes);
+
+        return imagenes;
+    } catch (error) {
+        console.error("Error al obtener datos de la hoja 'IMAGENES':", error);
+        throw error;
+    }
+}
+
 export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elementos, direccion, metodoPago, totalCosto, estado, observaciones) {
     console.log("Iniciando registro de nueva orden en la hoja 'ORDENES'");
 
@@ -1587,10 +1634,9 @@ async function interpretarIntent(userInput) {
 
     1. De momento, NO categorizar preguntas sobre recomendaciones o sugerencias en ninguna categoría existente.
     2. NO intentar interpretar intenciones que no coincidan exactamente con las categorías definidas.
-    3. Cualquier consulta ambigua o que no encaje perfectamente en una categoría debe ser marcada como inválida.
-    4. Las preguntas sobre promociones, ofertas o recomendaciones NO deben categorizarse como consultas de menú.
-    5. Solo categorizar como "Ordenar" cuando hay una intención EXPLÍCITA de realizar un pedido.
-    6. CONTEXTO Y SEMÁNTICA:
+    3. Las preguntas sobre promociones, ofertas o recomendaciones NO deben categorizarse como consultas de menú.
+    4. Solo categorizar como "Ordenar" cuando hay una intención EXPLÍCITA de realizar un pedido.
+    5. CONTEXTO Y SEMÁNTICA:
         - Analizar no solo palabras individuales, sino el contexto y la intención general
         - Prestar especial atención a frases que impliquen conclusión del proceso de pedido
 
@@ -1626,6 +1672,8 @@ async function interpretarIntent(userInput) {
         "categoriaInvalida": "No pertenece a ninguna categoria",
         "mensaje": "[Mensaje corto y claro explicando por qué no podemos procesar esta solicitud]"
     }
+
+    NOTA: no menciones nada relacionado con paginas web u otros medios para consultar informacion.
 
     Responde ÚNICAMENTE con el JSON correspondiente, sin texto adicional ni marcadores de código.`;
 
