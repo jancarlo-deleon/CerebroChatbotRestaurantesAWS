@@ -266,7 +266,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         sessionAttributes.initialInput = userInput;
         console.log("Input inicial guardado:", sessionAttributes.initialInput);
     }
-    
+
     // Verificar slots requeridos antes de proceder con la orden
     let slots = event.sessionState.intent.slots || {};
 
@@ -893,7 +893,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     // Limpiar todas las variables de sesión
     console.log("\n=== FINALIZANDO ORDEN ===");
 
-    console.log("\n==== PREPARANDO REGISTRO EN GOOGLE SHEETS ====");
+    console.log("\n==== PREPARANDO REGISTRO DE ORDEN EN GOOGLE SHEETS ====");
 
     try {
 
@@ -946,6 +946,49 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
     } catch (error) {
         console.error("Error general al preparar el registro de orden:", error);
+    }
+
+    console.log("\n==== PREPARANDO REGISTRO DE CLIENTE EN GOOGLE SHEETS ====");
+
+    try {
+
+        console.log("Preparando datos para registrar Cliente en Google Sheets:");
+
+        // Generar un número aleatorio entre 1000 y 2000
+        let codigo = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+
+        // Preparar el objeto de nueva orden
+        const nuevoCliente = {
+            "Codigo": codigo || 'N/A',
+            "Nombre": sessionAttributes.nombreCliente || 'N/A',
+            "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
+            "Direccion": sessionAttributes.direccionEntrega || 'N/A',
+        };
+
+        console.log("Datos de nuevo cliente a registrar:", JSON.stringify(nuevoCliente, null, 2));
+
+        // Realizar el registro en Google Sheets
+        try {
+
+            console.log("Iniciando registro de cliente en Google Sheets");
+            const response = await registrarCliente(
+                nuevoCliente["Codigo"],
+                nuevoCliente["Nombre"],
+                nuevoCliente["Numero de Telefono"],
+                nuevoCliente["Direccion"]
+            );
+
+            console.log("Resultado del registro de cliente en Google Sheets:", JSON.stringify(response, null, 2));
+
+
+        } catch (registroError) {
+
+            console.error("Error al intentar registrar al cliente en Google Sheets:", registroError);
+
+        }
+
+    } catch (error) {
+        console.error("Error general al preparar el registro de cliente:", error);
     }
 
     console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
@@ -1705,6 +1748,29 @@ export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elem
         return response.data;
     } catch (error) {
         console.error("Error al registrar la nueva orden en la hoja 'ORDENES':", error);
+        throw error;
+    }
+}
+
+export async function registrarCliente(codigo, nombre, telefono, direccion) {
+    console.log("Iniciando registro de nueva orden en la hoja 'CLIENTES'");
+
+    const nuevoCliente = {
+        "Codigo": codigo,
+        "Nombre": nombre,
+        "Numero de Telefono": telefono,
+        "Direccion": direccion
+    };
+
+    console.log("Datos del nuevo cliente a registrar:", nuevoCliente);
+
+    try {
+        const response = await axios.post(`${SHEET_BEST_API_URL}/tabs/CLIENTES`, nuevoCliente);
+        console.log("Respuesta de registro en la hoja 'CLIENTES':", response.data);
+
+        return response.data;
+    } catch (error) {
+        console.error("Error al registrar al cliente en la hoja 'CLIENTES':", error);
         throw error;
     }
 }
