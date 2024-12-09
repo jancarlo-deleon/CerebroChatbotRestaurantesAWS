@@ -261,12 +261,81 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
-
-    console.log("Preparando respuesta para ordenar");
-
-    console.log("Input de Entrada del usuario:", userInput);
+    // Guardar el input inicial si no existe en la sesión
+    if (!sessionAttributes.initialInput && userInput) {
+        sessionAttributes.initialInput = userInput;
+        console.log("Input inicial guardado:", sessionAttributes.initialInput);
+    }
+    
+    // Verificar slots requeridos antes de proceder con la orden
+    let slots = event.sessionState.intent.slots || {};
 
     try {
+
+        console.log("----Se empezará a tomar datos del cliente antes de proceder con la toma de orden----")
+
+        // Función auxiliar para verificar si un slot está completo
+        const isSlotComplete = (slotName) => {
+            const isComplete = slots[slotName] &&
+                slots[slotName].value &&
+                slots[slotName].value.interpretedValue;
+            console.log(`Verificando slot ${slotName}: ${isComplete ? 'Completo' : 'Incompleto'}`);
+            return isComplete;
+        };
+
+        // Verificar datos del cliente primero
+        const requiredSlots = [
+            'nombreCliente',
+            'telefonoCliente',
+            'direccionEntrega'
+        ];
+
+        // Verificar cada slot y solicitar el primero que falte
+        for (const slotName of requiredSlots) {
+            if (!isSlotComplete(slotName)) {
+                let message = "";
+                if (slotName === 'nombreCliente') {
+                    message = "Para empezar con tu orden, ¿podrías decirme tu nombre por favor?";
+                } else if (slotName === 'telefonoCliente') {
+                    message = "¿Cuál es tu número de teléfono?";
+                } else if (slotName === 'direccionEntrega') {
+                    message = "¿Cuál sería tu dirección de entrega? También puedes indicar si prefieres recoger en el establecimiento.";
+                }
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: slotName
+                        },
+                        intent: {
+                            name: "OrdenarIntent",
+                            slots: slots,
+                            state: "InProgress"
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [{
+                        contentType: "PlainText",
+                        content: message
+                    }]
+                };
+            }
+        }
+
+        // Guardar la información del cliente en las variables de sesión
+        sessionAttributes.nombreCliente = slots.nombreCliente.value.interpretedValue;
+        sessionAttributes.telefonoCliente = slots.telefonoCliente.value.interpretedValue;
+        sessionAttributes.direccionEntrega = slots.direccionEntrega.value.interpretedValue;
+
+        // Recuperar el input inicial para procesar la orden
+        userInput = sessionAttributes.initialInput;
+        console.log("Recuperando input inicial para procesar:", userInput);
+
+        console.log("Preparando respuesta para ordenar");
+
+        console.log("Input de Entrada del usuario:", userInput);
+
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
@@ -443,7 +512,6 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             ]
         };
     }
-
 
 }
 
@@ -734,10 +802,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
             console.log("Iniciando actualización de slots con respuesta de OpenAI");
             const slotMapping = {
-                nombreCliente: openAIResponse.nombreCliente,
-                telefonoCliente: openAIResponse.telefonoCliente,
                 metodoPago: openAIResponse.metodoPago,
-                direccionEntrega: openAIResponse.direccionEntrega
             };
 
             console.log("Mapping de slots a actualizar:", slotMapping);
@@ -779,66 +844,28 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
     console.log("\n=== VERIFICACIÓN DE SLOTS REQUERIDOS ===");
     // Verificar cada slot requerido y solicitar el primero que falte
-    const requiredSlots = [
-        'nombreCliente',
-        'telefonoCliente',
-        'metodoPago',
-        'direccionEntrega'
-    ];
+    const requiredSlots = ['metodoPago'];
 
     for (const slotName of requiredSlots) {
         if (!isSlotComplete(slotName)) {
-            console.log(`Solicitando información para slot: ${slotName}`);
-
-            // Crear el mensaje apropiado según el slot
-            let messages = [];
-            if (slotName === 'nombreCliente') {
-                messages = [{
-                    contentType: "PlainText",
-                    content: "¿Cuál es el nombre de quien recibirá la orden?"
-                }];
-            } else if (slotName === 'telefonoCliente') {
-                messages = [{
-                    contentType: "PlainText",
-                    content: "¿Cuál sería el número de teléfono?"
-                }];
-            } else if (slotName === 'metodoPago') {
-                messages = [{
-                    contentType: "PlainText",
-                    content: "¿Cuál será tu método de pago?"
-                }];
-            } else if (slotName === 'direccionEntrega') {
-                messages = [
-                    {
-                        contentType: "PlainText",
-                        content: "Contamos con entregas a domicilio GRATIS en el perímetro de la ciudad y también puedes pasar a recoger tu pedido a nuestro establecimiento."
-                    },
-                    {
-                        contentType: "PlainText",
-                        content: "¿Cómo te gustaria manejar la entrega de tu orden?"
-                    }
-                ];
-            }
-
-            // Retornar la respuesta con el intent correcto
-            const response = {
+            return {
                 sessionState: {
                     dialogAction: {
                         type: "ElicitSlot",
                         slotToElicit: slotName
                     },
                     intent: {
-                        name: "FinalizarOrdenIntent",
+                        name: event.sessionState.intent.name,
                         slots: slots,
                         state: "InProgress"
                     },
                     sessionAttributes: sessionAttributes
                 },
-                messages: messages
+                messages: [{
+                    contentType: "PlainText",
+                    content: "¿Cuál será tu método de pago?"
+                }]
             };
-
-            console.log("Respuesta ElicitSlot generada:", JSON.stringify(response, null, 2));
-            return response;
         }
     }
 
@@ -854,9 +881,9 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     const mensajeResumen = `
     Tu orden es la #${numeroOrden} \n
     
-    • Nombre de quien recibe: ${slots.nombreCliente.value.interpretedValue} \n
-    • Número de Teléfono: ${slots.telefonoCliente.value.interpretedValue} \n
-    • Entrega: ${slots.direccionEntrega.value.interpretedValue} \n
+    • Nombre de quien recibe: ${sessionAttributes.nombreCliente} \n
+    • Número de Teléfono: ${sessionAttributes.telefonoCliente} \n
+    • Entrega: ${sessionAttributes.direccionEntrega} \n
     • Orden: ${sessionAttributes.orden} \n
     • Comentarios: ${sessionAttributes.comentariosOrden || 'Sin comentarios'} \n
     • Método de pago: ${slots.metodoPago.value.interpretedValue} \n
@@ -879,10 +906,10 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
         const nuevaOrden = {
             "No. Orden": sessionAttributes.numeroOrden || 'N/A',
             "Fecha y Hora": fechaHora,
-            "Cliente": slots.nombreCliente?.value?.interpretedValue || 'N/A',
-            "Numero de Telefono": slots.telefonoCliente?.value?.interpretedValue || 'N/A',
+            "Cliente": sessionAttributes.nombreCliente || 'N/A',
+            "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
             "Elementos Ordenados": sessionAttributes.orden || 'N/A',
-            "Direccion": slots.direccionEntrega?.value?.interpretedValue || 'N/A',
+            "Direccion": sessionAttributes.direccionEntrega || 'N/A',
             "Metodo de Pago": slots.metodoPago?.value?.interpretedValue || 'N/A',
             "Total": sessionAttributes.totalCosto || 'N/A',
             "Estado": "Pendiente",
@@ -1491,7 +1518,7 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
     console.log("Preparando respuesta para visualizar elemento del menú");
 
     try {
-        
+
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
@@ -1508,13 +1535,13 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
             imagenElemento = imagenesData.find(imagen =>
                 imagen.Nombre.toLowerCase().includes(sessionAttributes.orden.toLowerCase())
             );
-            console.log("Valor de imagenElemento usando orden de atributo de sesion:",imagenElemento);
+            console.log("Valor de imagenElemento usando orden de atributo de sesion:", imagenElemento);
         } else {
             // Buscar la imagen que coincida parcialmente con el nombre procesado del input
             imagenElemento = imagenesData.find(imagen =>
                 imagen.Nombre.toLowerCase().includes(respuestaElementoMenu.nombreElemento.toLowerCase())
             );
-            console.log("Valor de imagenElemento usando nombre procesado del input:",imagenElemento);
+            console.log("Valor de imagenElemento usando nombre procesado del input:", imagenElemento);
         }
 
 
@@ -1951,74 +1978,6 @@ async function generarMensajeBienvenida(userInput) {
         return JSON.parse(response.data.choices[0].message.content);
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT:", error);
-        throw error;
-    }
-}
-
-async function generarVistaMenu(menuData) {
-    const systemPrompt = `
-    Eres un asistente de restaurante que presenta el menú. Tienes acceso al siguiente menú actualizado:
-    ${JSON.stringify(menuData, null, 2)}
-
-    Tu tarea es:
-    1. Generar un mensaje de presentación de introduccion breve (Que no sea hola, bienvenido, etc). Algo tipo: Con gusto, etc
-    2. Para cada elemento del menú, generar una descripción que SOLO incluya:
-       - Nombre del elemento
-       - Precio
-       - Descripción (si existe en los datos)
-    3. NO inventar ni agregar información que no esté en los datos proporcionados
-    4. NO incluir códigos de producto en las descripciones
-    5. NO agregar categorías o agrupaciones que no existan en los datos
-    6. Usar un formato consistente para cada elemento
-    7. Genera un mensaje donde se le pregunte al cliente y se le incite a ordenar algo o preguntar por alguna duda
-
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {
-                "codigo": "CÓDIGO_DEL_ELEMENTO",
-                "mensaje": "Descripción formateada del elemento"
-            }
-        ],
-        "mensajeInicial": "Mensaje de bienvenida breve"
-        "mensajeFinal": "Mensaje donde se pregunta al cliente si va a ordenar o preguntar algo"
-    }
-    `;
-
-    const userPrompt = `
-    Por favor, genera los mensajes para cada elemento del menú siguiendo estrictamente las instrucciones dadas.
-    Solo usa la información disponible en los datos proporcionados.
-    `;
-
-    try {
-        const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: userPrompt
-                }
-            ],
-            temperature: 0.5
-        }, {
-            headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        console.log("Respuesta de ChatGPT para presentación del menú:");
-        console.log("--------------------------------------");
-        console.log(response.data.choices[0].message.content);
-        console.log("--------------------------------------");
-
-        return JSON.parse(response.data.choices[0].message.content);
-    } catch (error) {
-        console.error("Error al llamar a la API de ChatGPT para mostrar menú:", error);
         throw error;
     }
 }
