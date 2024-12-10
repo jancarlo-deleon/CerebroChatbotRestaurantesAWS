@@ -89,6 +89,20 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'MetodosDePagoIntent') {
+        console.log("Se esta activando esta parte por medio de MetodosDePagoIntent");
+
+        return handleMetodosDePagoIntent(event, sessionAttributes, userInput);
+
+    }
+
+    if (intentName == 'MetodosDeEnvioIntent') {
+        console.log("Se esta activando esta parte por medio de MetodosDeEnvioIntent");
+
+        return handleMetodosDeEnvioIntent(event, sessionAttributes, userInput);
+
+    }
+
     if (intentName == 'ConectarAAgenteIntent') {
         console.log("Se esta activando esta parte por medio de ConectarAAgenteIntent");
 
@@ -1482,7 +1496,7 @@ async function handleAgradecimientoIntent(event, sessionAttributes, userInput) {
 
 }
 
-async function handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, userInput) {
+async function handleMetodosDePagoIntent(event, sessionAttributes, userInput) {
     console.log('=== Inicio de handleMetodosDePagoIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
@@ -1490,9 +1504,16 @@ async function handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, u
     console.log("Preparando respuesta para metodos de pago");
 
     try {
+
         // Obtener el mensaje de metodos de pago
         const mensajeMetodosDePago = await generarMensajeMetodosDePago(userInput);
-        console.log("Mensaje de metodos de pago generado:", mensajeMetodosDePago);
+        console.log("Mensajes de métodos de pago generados:", mensajeMetodosDePago);
+
+        // Construir mensajes para la respuesta
+        const messages = mensajeMetodosDePago.mensajes.map(msg => ({
+            contentType: "PlainText",
+            content: msg.mensaje
+        }));
 
         return {
             sessionState: {
@@ -1505,12 +1526,7 @@ async function handleMetodosDePagoIntent(event, sessionAttributes, intentInfo, u
                 },
                 sessionAttributes: sessionAttributes
             },
-            messages: [
-                {
-                    contentType: "PlainText",
-                    content: mensajeMetodosDePago.mensaje
-                }
-            ]
+            messages: messages
         };
     } catch (error) {
         console.error("Error en handleMetodosDePagoIntent:", error);
@@ -1546,9 +1562,15 @@ async function handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, 
     console.log("Preparando respuesta para metodos de envio");
 
     try {
-        // Obtener el mensaje de metodos de envio
+        // Obtener los mensajes de métodos de envío
         const mensajeMetodosDeEnvio = await generarMensajeMetodosDeEnvio(userInput);
-        console.log("Mensaje de metodos de pago generado:", mensajeMetodosDeEnvio);
+        console.log("Mensajes de métodos de envío generados:", mensajeMetodosDeEnvio);
+
+        // Construir mensajes para la respuesta
+        const messages = mensajeMetodosDeEnvio.mensajes.map(msg => ({
+            contentType: "PlainText",
+            content: msg.mensaje
+        }));
 
         return {
             sessionState: {
@@ -1561,12 +1583,7 @@ async function handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, 
                 },
                 sessionAttributes: sessionAttributes
             },
-            messages: [
-                {
-                    contentType: "PlainText",
-                    content: mensajeMetodosDeEnvio.mensaje
-                }
-            ]
+            messages: messages
         };
     } catch (error) {
         console.error("Error en handleMetodosDeEnvioIntent:", error);
@@ -2337,29 +2354,47 @@ async function generarMensajeAgradecimiento(userInput) {
 }
 
 async function generarMensajeMetodosDePago(userInput) {
+    // Obtener el contexto específico del restaurante
+    let contextoRestaurante = await getInicio();
+
     const systemPrompt = `
-    Eres un chatbot de restaurante que informa sobre métodos de pago aceptados.
-    Solo debes mencionar dos opciones: tarjeta y efectivo.
-    Las respuestas deben ser concisas y claras.
+    Eres un chatbot especializado en informar sobre opciones de metodo de pago para un restaurante específico.
+    Debes generar una respuesta personalizada basada en la información del restaurante.
+    
+    Información del restaurante: ${JSON.stringify(contextoRestaurante, null, 2)}
+
+    Genera una respuesta dividida en varios mensajes que:
+    1. Explique brevemente las opciones de metodo de pago
+    2. Invite a realizar un pedido
 
     Formato de respuesta:
     {
-        "mensaje": "Aquí va la información sobre métodos de pago"
+        "mensajes": [
+            {"mensaje": "Primer mensaje sobre métodos de pago"},
+            {"mensaje": "Segundo mensaje para Invitar a realizar un pedido"},
+        ]
     }
+
+    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
+
     `;
 
+
     const userPrompt = `
-    El cliente ha preguntado sobre métodos de pago con el siguiente mensaje:
+    El cliente ha preguntado sobre las opciones de metodo de pago con el siguiente mensaje:
     "${userInput}"
 
-    Genera una respuesta amable que explique claramente que aceptamos únicamente tarjeta y efectivo.
-    La respuesta debe ser breve y directa.
+    Al generar la respuesta, considera:
+    - Mencionar específicamente las opciones de pago, los cuales son efectivo, tarjeta y pago contra entrega
+    - Utilizar información contextual del restaurante para personalizar la respuesta
+    - Ser claro, conciso y amigable
+    - Variar la redacción para que no sean siempre los mismos mensajes
+    - No usar información que no esté confirmada en el contexto del restaurante
 
-    NO digas hola cada vez que generes el mensaje.
-
-    NO USES EMOJIS.
-
-    Y trata de que no siempre se genere el mismo mensaje, sino que sea variado.
+    Recuerda:
+    - NO digas hola cada vez que generes el mensaje
+    - NO USES EMOJIS
+    - Sé natural y conversacional
     `;
 
     try {
@@ -2375,7 +2410,7 @@ async function generarMensajeMetodosDePago(userInput) {
                     content: userPrompt
                 }
             ],
-            temperature: 0.5
+            temperature: 0.7
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -2395,29 +2430,46 @@ async function generarMensajeMetodosDePago(userInput) {
 }
 
 async function generarMensajeMetodosDeEnvio(userInput) {
+    // Obtener el contexto específico del restaurante
+    let contextoRestaurante = await getInicio();
+
     const systemPrompt = `
-    Eres un chatbot de restaurante que informa sobre las opciones de entrega disponibles.
-    Solo debes mencionar dos opciones: entrega a domicilio en la ciudad y recoger en el establecimiento.
-    Las respuestas deben ser informativas y amables.
+    Eres un chatbot especializado en informar sobre opciones de entrega para un restaurante específico.
+    Debes generar una respuesta personalizada basada en la información del restaurante.
+    
+    Información del restaurante: ${JSON.stringify(contextoRestaurante, null, 2)}
+
+    Genera una respuesta dividida en varios mensajes que:
+    1. Explique brevemente las opciones de entrega
+    2. Invite a realizar un pedido
 
     Formato de respuesta:
     {
-        "mensaje": "Aquí va la información sobre métodos de envío"
+        "mensajes": [
+            {"mensaje": "Primer mensaje sobre métodos de entrega"},
+            {"mensaje": "Segundo mensaje para Invitar a realizar un pedido"},
+        ]
     }
+
+    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
+
     `;
 
     const userPrompt = `
     El cliente ha preguntado sobre las opciones de entrega con el siguiente mensaje:
     "${userInput}"
 
-    Genera una respuesta amable que explique las dos opciones disponibles: entrega a domicilio en la ciudad y recoger en el establecimiento.
-    La respuesta debe ser clara y concisa.
+    Al generar la respuesta, considera:
+    - Mencionar específicamente las opciones de entrega a domicilio y recoger en el establecimiento
+    - Utilizar información contextual del restaurante para personalizar la respuesta
+    - Ser claro, conciso y amigable
+    - Variar la redacción para que no sean siempre los mismos mensajes
+    - No usar información que no esté confirmada en el contexto del restaurante
 
-    NO digas hola cada vez que generes el mensaje.
-
-    NO USES EMOJIS.
-
-    Y trata de que no siempre se genere el mismo mensaje, sino que sea variado.
+    Recuerda:
+    - NO digas hola cada vez que generes el mensaje
+    - NO USES EMOJIS
+    - Sé natural y conversacional
     `;
 
     try {
@@ -2433,7 +2485,7 @@ async function generarMensajeMetodosDeEnvio(userInput) {
                     content: userPrompt
                 }
             ],
-            temperature: 0.5
+            temperature: 0.6
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
