@@ -8,6 +8,7 @@ dotenv.config();
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_URL = process.env.OPENAI_API_URL;
 const SHEET_BEST_API_URL = process.env.SHEET_BEST_API_URL;
+const MAX_FALLBACKS = 5;
 
 export const handler = async (event) => {
 
@@ -88,6 +89,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'ConectarAAgenteIntent') {
+        console.log("Se esta activando esta parte por medio de ConectarAAgenteIntent");
+
+        return handleConectarAAgenteIntent(event, sessionAttributes, userInput);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -163,10 +171,46 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
 
         case 'handleVisualizarIntent':
             return handleVisualizarIntent(event, sessionAttributes, userInput);
+            
+        case 'handleConectarAAgenteIntent':
+            return handleConectarAAgenteIntent(event, sessionAttributes, userInput);
 
         default:
-            // Si no se detectan las palabras clave, procedemos con el fallback estándar
             console.log("No hay coincidencia con categorias, por lo cual, se procede con el Fallback normal");
+
+            if (!sessionAttributes.fallbackCount) {
+                sessionAttributes.fallbackCount = 1;
+            } else {
+                sessionAttributes.fallbackCount++;
+            }
+
+            console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+            if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        },
+                        sessionAttributes: {
+                            ...sessionAttributes,
+                            requiresHumanIntervention: true,
+                            reason: "El cliente realizó multiples intentos para obtener respuestas que no maneja el restaurante. Contactar para validar si tiene dificultadoes"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                        }
+                    ]
+                };
+            }
+
             let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
             console.log("Contenido de fallbackMessage generado desde OpenAI: ", fallbackMessage);
 
@@ -1006,7 +1050,11 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
                 name: event.sessionState.intent.name,
                 state: "Fulfilled"
             },
-            sessionAttributes: sessionAttributes
+            sessionAttributes: {
+                ...sessionAttributes,
+                requiresHumanIntervention: true,
+                reason: "Orden Completada. Verificar conversacion y validar directamente con el cliente",
+            }
         },
         messages: [
             {
@@ -1023,7 +1071,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
             },
             {
                 contentType: "PlainText",
-                content: "Estoy a la orden para apoyarte cuando se te ofrezca."
+                content: "En un momento un agente se pondrá en contacto contigo para confirmar los detalles."
             }
         ]
     };
@@ -1659,6 +1707,33 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
     }
 }
 
+async function handleConectarAAgenteIntent(event, sessionAttributes, userInput){
+
+    sessionAttributes.reason = "El cliente desea contactar directamente a un agente humano.";
+    sessionAttributes.requiresHumanIntervention =true;
+
+    console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
+
+    return {
+        sessionState: {
+            dialogAction: {
+                type: "Close"
+            },
+            intent: {
+                name: event.sessionState.intent.name,
+                state: "Failed"
+            },
+            sessionAttributes: sessionAttributes
+        },
+        messages: [
+            {
+                contentType: "PlainText",
+                content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+            }
+        ]
+    };
+}
+
 
 //Metodos para usar sheet.best
 async function getInicio() {
@@ -1775,6 +1850,35 @@ export async function registrarCliente(codigo, nombre, telefono, direccion) {
     }
 }
 
+async function buscarClienteExistente(nombre, telefono) {
+    console.log("Buscando cliente con nombre:", nombre, "y teléfono:", telefono);
+
+    try {
+        // Obtener todos los clientes de la hoja
+        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/CLIENTES`);
+        const clientes = response.data;
+
+        // Buscar coincidencia exacta de nombre y teléfono
+        const clienteEncontrado = clientes.find(cliente =>
+            cliente['Nombre'].toLowerCase() === nombre.toLowerCase() &&
+            cliente['Numero de Telefono'] === telefono
+        );
+
+        if (clienteEncontrado) {
+            console.log("Cliente encontrado:", clienteEncontrado);
+            return {
+                encontrado: true,
+                direccion: clienteEncontrado['Direccion']
+            };
+        }
+
+        return { encontrado: false };
+    } catch (error) {
+        console.error("Error al buscar cliente:", error);
+        throw error;
+    }
+}
+
 
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
 async function interpretarIntent(userInput) {
@@ -1853,11 +1957,13 @@ async function interpretarIntent(userInput) {
     5. CONTEXTO Y SEMÁNTICA:
         - Analizar no solo palabras individuales, sino el contexto y la intención general
         - Prestar especial atención a frases que impliquen conclusión del proceso de pedido
+    6. NO SUGIERAS COSAS QUE NO SE ESTAN TOMANDO EN CONSIDERACION DENTRE DE LAS CATEGORIAS. Ejemplo: sugerir horarios, promociones, reservas,etc.
 
 
     IMPORTANTE: 
         - Evaluar holísticamente la intención del usuario
-        - Priorizar la categoría que mejor capture el propósito final de la comunicación`;
+        - Priorizar la categoría que mejor capture el propósito final de la comunicación
+        - No sugieras en general alternativas que no estan dentro de las capacidades. Las capacidades son las 12 categorias, por lo mismo, no ofrezcas cosas como reservas, visitar pagina web, horarios, promociones y entre otras cosas.`;
 
     const userPrompt = `Analiza el siguiente input y categorízalo según las reglas estrictas definidas:
     "${userInput}"
