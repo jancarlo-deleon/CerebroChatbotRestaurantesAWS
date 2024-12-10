@@ -244,17 +244,15 @@ async function handleBienvenidaIntent(event, sessionAttributes, intentInfo, user
     console.log("Preparando respuesta para bienvenida");
 
     try {
-        // Obtener el mensaje de bienvenida
-        const mensajeBienvenida = await generarMensajeBienvenida(userInput);
-        console.log("Mensaje de bienvenida generado:", mensajeBienvenida);
+        // Obtener los mensajes de bienvenida
+        const bienvenidaResponse = await generarMensajeBienvenida(userInput);
+        console.log("Mensajes de bienvenida generados:", bienvenidaResponse);
 
-        /** 
-        const consultaInicio = await getInicio();
-        console.log("informacion obtenida de la hoja INICIO a traves de shee.best: ", consultaInicio);
-
-        const consultaMenu = await getMenu();
-        console.log("informacion obtenida de la hoja MENU a traves de shee.best: ", consultaMenu);
-        */
+        // Construir mensajes para la respuesta
+        const messages = bienvenidaResponse.mensajes.map(msg => ({
+            contentType: "PlainText",
+            content: msg.mensaje
+        }));
 
         return {
             sessionState: {
@@ -267,12 +265,7 @@ async function handleBienvenidaIntent(event, sessionAttributes, intentInfo, user
                 },
                 sessionAttributes: sessionAttributes
             },
-            messages: [
-                {
-                    contentType: "PlainText",
-                    content: mensajeBienvenida.mensaje
-                }
-            ]
+            messages: messages
         };
     } catch (error) {
         console.error("Error en handleBienvenidaIntent:", error);
@@ -2097,13 +2090,20 @@ async function generarMensajeBienvenida(userInput) {
     Debes mencionar que puedes ayudar a tomar pedidos y responder preguntas sobre el menú.
     Las respuestas deben ser breves pero acogedoras.
 
-    Y basate en la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
+    Genera una serie de mensajes cortos que se puedan enviar secuencialmente:
+    - Primer mensaje: Saludo inicial
+    - Segundo mensaje: Breve descripción de servicios
+    - Tercer mensaje: Invitación a explorar el menú o hacer un pedido
 
-    La cual es la del restaurante al cual estas apoyando. Basa tu respuesta para que este en sincronía con el tipo de restaurante.
+    Y basate en la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
 
     Formato de respuesta:
     {
-        "mensaje": "Aquí va el mensaje de bienvenida"
+        "mensajes": [
+            {"mensaje": "Primer mensaje corto"},
+            {"mensaje": "Segundo mensaje corto"},
+            {"mensaje": "Tercer mensaje corto"}
+        ]
     }
     `;
 
@@ -2111,15 +2111,14 @@ async function generarMensajeBienvenida(userInput) {
     El cliente ha iniciado una conversación o ha saludado con el siguiente mensaje:
     "${userInput}"
 
-    Genera un mensaje de bienvenida que:
-    1. Salude de manera cálida
-    2. Mencione que puedes ayudar con pedidos
-    3. Invite al cliente a preguntar sobre el menú
-    La respuesta debe ser concisa pero amigable.
+    Genera mensajes de bienvenida que:
+    1. Saluden de manera cálida
+    2. Mencionen que puedes ayudar con pedidos
+    3. Inviten al cliente a preguntar sobre el menú
+    
+    Las respuestas deben ser concisas, variadas y divididas en 3 mensajes cortos.
 
     NO USES EMOJIS.
-
-    Y trata de que no siempre se genere el mismo mensaje de saludo, sino que sea variado.
     `;
 
     try {
