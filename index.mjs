@@ -185,7 +185,7 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
 
         case 'handleVisualizarIntent':
             return handleVisualizarIntent(event, sessionAttributes, userInput);
-            
+
         case 'handleConectarAAgenteIntent':
             return handleConectarAAgenteIntent(event, sessionAttributes, userInput);
 
@@ -334,6 +334,126 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             return isComplete;
         };
 
+        // Verificar si tenemos nombre y teléfono pero aún no hemos validado el cliente
+        if (isSlotComplete('nombreCliente') &&
+            isSlotComplete('telefonoCliente') &&
+            !sessionAttributes.clienteValidado) {
+
+            const nombre = slots.nombreCliente.value.interpretedValue;
+            const telefono = slots.telefonoCliente.value.interpretedValue;
+
+            try {
+                const clienteExistente = await buscarClienteExistente(nombre, telefono);
+
+                if (clienteExistente.encontrado) {
+                    sessionAttributes.direccionRegistrada = clienteExistente.direccion;
+                    sessionAttributes.clienteValidado = true;
+
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "ElicitSlot",
+                                slotToElicit: "confirmarDireccion"
+                            },
+                            intent: {
+                                name: "OrdenarIntent",
+                                slots: {
+                                    ...slots,
+                                    confirmarDireccion: null
+                                },
+                                state: "InProgress"
+                            },
+                            sessionAttributes: sessionAttributes
+                        },
+                        messages: [{
+                            contentType: "PlainText",
+                            content: `Veo que ya tenemos tus datos registrados. Tu dirección registrada es: `
+                        },
+                        {
+                            contentType: "PlainText",
+                            content: `${clienteExistente.direccion}.`
+                        },
+                        {
+                            contentType: "PlainText",
+                            content: `¿Deseas usar esta dirección para tu pedido?`
+                        }
+                        ]
+                    };
+                } else {
+                    sessionAttributes.clienteValidado = true;
+                    // Si no se encuentra el cliente, continuar pidiendo la dirección normalmente
+                }
+            } catch (error) {
+                console.error("Error al validar cliente:", error);
+                // Continuar con el flujo normal en caso de error
+            }
+        }
+
+        // Manejar la respuesta de confirmación de dirección
+        if (isSlotComplete('confirmarDireccion') && sessionAttributes.direccionRegistrada) {
+            const confirmacion = slots.confirmarDireccion.value.interpretedValue;
+
+            // Usar la función verificarConfirmacion para analizar la respuesta
+            const resultadoConfirmacion = await verificarConfirmacion(confirmacion);
+
+            if (resultadoConfirmacion.isConfirmacion) {
+                slots.direccionEntrega = {
+                    value: {
+                        interpretedValue: sessionAttributes.direccionRegistrada
+                    }
+                };
+
+                // Marcar que ya se procesó la confirmación
+                sessionAttributes.confirmacionProcesada = true;
+
+            } else {
+
+                // Si ya tenemos la nueva dirección después de decir "no"
+                if (isSlotComplete('direccionEntrega') && !sessionAttributes.confirmacionProcesada) {
+                    // Usar la nueva dirección proporcionada
+                    sessionAttributes.direccionRegistrada = slots.direccionEntrega.value.interpretedValue;
+                    sessionAttributes.confirmacionProcesada = true;
+                } else {
+
+                    // Si aún no tenemos la nueva dirección, solicitarla
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "ElicitSlot",
+                                slotToElicit: "direccionEntrega"
+                            },
+                            intent: {
+                                name: "OrdenarIntent",
+                                slots: {
+                                    ...slots,
+                                    direccionEntrega: null // Limpiar el slot para nueva entrada
+                                },
+                                state: "InProgress"
+                            },
+                            sessionAttributes: {
+                                ...sessionAttributes,
+                                esperandoNuevaDireccion: true // Marcar que estamos esperando nueva dirección
+                            }
+                        },
+                        messages: [{
+                            contentType: "PlainText",
+                            content: "Por favor, indícame la nueva dirección de entrega:"
+                        }]
+                    };
+                }
+
+            }
+        }
+
+        // Agregar esta validación adicional para procesar la nueva dirección
+        if (sessionAttributes.esperandoNuevaDireccion && isSlotComplete('direccionEntrega')) {
+            // Actualizar la dirección en los atributos de sesión
+            sessionAttributes.direccionRegistrada = slots.direccionEntrega.value.interpretedValue;
+            sessionAttributes.esperandoNuevaDireccion = false;
+            sessionAttributes.confirmacionProcesada = true;
+        }
+
+
         // Verificar datos del cliente primero
         const requiredSlots = [
             'nombreCliente',
@@ -397,7 +517,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         if (elementoPrevio) {
 
             console.log("Detectada orden contextual basada en consulta previa");
-            userInput = elementoPrevio + userInput;
+            userInput = elementoPrevio + " " + userInput;
             console.log("El input a procesar quedaria de la siguiente manera: ", userInput);
         }
 
@@ -1001,45 +1121,54 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
     console.log("\n==== PREPARANDO REGISTRO DE CLIENTE EN GOOGLE SHEETS ====");
 
-    try {
+    const clienteExistente = await buscarClienteExistente(sessionAttributes.nombreCliente, sessionAttributes.telefonoCliente);
 
-        console.log("Preparando datos para registrar Cliente en Google Sheets:");
+    if (!clienteExistente.encontrado) {
+        console.log("El cliente no esta registrado, por lo cual, se procede a realizar el registro:")
 
-        // Generar un número aleatorio entre 1000 y 2000
-        let codigo = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
-
-        // Preparar el objeto de nueva orden
-        const nuevoCliente = {
-            "Codigo": codigo || 'N/A',
-            "Nombre": sessionAttributes.nombreCliente || 'N/A',
-            "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
-            "Direccion": sessionAttributes.direccionEntrega || 'N/A',
-        };
-
-        console.log("Datos de nuevo cliente a registrar:", JSON.stringify(nuevoCliente, null, 2));
-
-        // Realizar el registro en Google Sheets
         try {
 
-            console.log("Iniciando registro de cliente en Google Sheets");
-            const response = await registrarCliente(
-                nuevoCliente["Codigo"],
-                nuevoCliente["Nombre"],
-                nuevoCliente["Numero de Telefono"],
-                nuevoCliente["Direccion"]
-            );
-
-            console.log("Resultado del registro de cliente en Google Sheets:", JSON.stringify(response, null, 2));
+            console.log("Preparando datos para registrar Cliente en Google Sheets:");
 
 
-        } catch (registroError) {
 
-            console.error("Error al intentar registrar al cliente en Google Sheets:", registroError);
+            // Generar un número aleatorio entre 1000 y 2000
+            let codigo = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
 
+            // Preparar el objeto de nueva orden
+            const nuevoCliente = {
+                "Codigo": codigo || 'N/A',
+                "Nombre": sessionAttributes.nombreCliente || 'N/A',
+                "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
+                "Direccion": sessionAttributes.direccionEntrega || 'N/A',
+            };
+
+            console.log("Datos de nuevo cliente a registrar:", JSON.stringify(nuevoCliente, null, 2));
+
+            // Realizar el registro en Google Sheets
+            try {
+
+                console.log("Iniciando registro de cliente en Google Sheets");
+                const response = await registrarCliente(
+                    nuevoCliente["Codigo"],
+                    nuevoCliente["Nombre"],
+                    nuevoCliente["Numero de Telefono"],
+                    nuevoCliente["Direccion"]
+                );
+
+                console.log("Resultado del registro de cliente en Google Sheets:", JSON.stringify(response, null, 2));
+
+
+            } catch (registroError) {
+
+                console.error("Error al intentar registrar al cliente en Google Sheets:", registroError);
+
+            }
+
+        } catch (error) {
+            console.error("Error general al preparar el registro de cliente:", error);
         }
 
-    } catch (error) {
-        console.error("Error general al preparar el registro de cliente:", error);
     }
 
     console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
@@ -1717,10 +1846,10 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
     }
 }
 
-async function handleConectarAAgenteIntent(event, sessionAttributes, userInput){
+async function handleConectarAAgenteIntent(event, sessionAttributes, userInput) {
 
     sessionAttributes.reason = "El cliente desea contactar directamente a un agente humano.";
-    sessionAttributes.requiresHumanIntervention =true;
+    sessionAttributes.requiresHumanIntervention = true;
 
     console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
 
@@ -1875,7 +2004,7 @@ async function buscarClienteExistente(nombre, telefono) {
         );
 
         if (clienteEncontrado) {
-            console.log("Cliente encontrado:", clienteEncontrado);
+            console.log("----Cliente encontrado:", clienteEncontrado);
             return {
                 encontrado: true,
                 direccion: clienteEncontrado['Direccion']
