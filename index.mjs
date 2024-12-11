@@ -213,7 +213,7 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
                         sessionAttributes: {
                             ...sessionAttributes,
                             requiresHumanIntervention: true,
-                            reason: "El cliente realizó multiples intentos para obtener respuestas que no maneja el restaurante. Contactar para validar si tiene dificultadoes"
+                            reason: "El cliente realizó multiples intentos para obtener respuestas que no maneja el restaurante. Contactar para validar si tiene dificultades"
                         }
                     },
                     messages: [
@@ -573,6 +573,42 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         console.log("Es orden valida? :", isValidOrder.isValidOrder);
 
         if (!isValidOrder.isValidOrder) {
+
+            console.log("NO es una orden valida la que se desea realizar");
+
+            if (!sessionAttributes.fallbackCount) {
+                sessionAttributes.fallbackCount = 1;
+            } else {
+                sessionAttributes.fallbackCount++;
+            }
+    
+            console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+    
+            if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        },
+                        sessionAttributes: {
+                            ...sessionAttributes,
+                            requiresHumanIntervention: true,
+                            reason: "El cliente realizó multiples intentos para ordenar algo que no es valido. Contactar para validar si tiene dificultades"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                        }
+                    ]
+                };
+            }
+
             return {
                 sessionState: {
                     dialogAction: {
@@ -705,6 +741,40 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
     if (!tieneOrdenActiva) {
         console.log("NO se ha encontrado alguna orden activa")
+
+        if (!sessionAttributes.fallbackCount) {
+            sessionAttributes.fallbackCount = 1;
+        } else {
+            sessionAttributes.fallbackCount++;
+        }
+
+        console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+        if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    },
+                    sessionAttributes: {
+                        ...sessionAttributes,
+                        requiresHumanIntervention: true,
+                        reason: "El cliente realizó multiples intentos para agregar elementos a una orden que no esta activa. Contactar para validar si tiene dificultades"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                    }
+                ]
+            };
+        }
+
         return {
             sessionState: {
                 dialogAction: {
@@ -1235,6 +1305,40 @@ async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo) {
 
     if (!tieneOrdenActiva) {
         console.log("NO se ha encontrado alguna orden activa")
+
+        if (!sessionAttributes.fallbackCount) {
+            sessionAttributes.fallbackCount = 1;
+        } else {
+            sessionAttributes.fallbackCount++;
+        }
+
+        console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+        if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    },
+                    sessionAttributes: {
+                        ...sessionAttributes,
+                        requiresHumanIntervention: true,
+                        reason: "El cliente realizó multiples intentos para cancelar una orden que no esta activa. Contactar para validar si tiene dificultades"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                    }
+                ]
+            };
+        }
+
         return {
             sessionState: {
                 dialogAction: {
@@ -1498,7 +1602,7 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
             }
         }
 
-         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
+        // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
 
         sessionAttributes.orden = respuesta.nombreElemento;
 
@@ -1600,8 +1704,8 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
             }
         }
 
-         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
-        
+        // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
+
         sessionAttributes.orden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
