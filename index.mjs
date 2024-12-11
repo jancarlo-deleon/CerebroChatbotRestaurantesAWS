@@ -1460,6 +1460,46 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
 
         console.log("Valor de la respuesta obtenida:", respuesta)
 
+        // Si el elemento no existe, manejar el conteo de fallbacks
+        if (!respuesta.elementoExiste) {
+            // Incrementar el contador de fallbacks
+            if (!sessionAttributes.fallbackCount) {
+                sessionAttributes.fallbackCount = 1;
+            } else {
+                sessionAttributes.fallbackCount++;
+            }
+
+            console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+            // Si se alcanza el máximo de fallbacks, transferir a agente humano
+            if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        },
+                        sessionAttributes: {
+                            ...sessionAttributes,
+                            requiresHumanIntervention: true,
+                            reason: "El cliente realizó multiples intentos para obtener respuestas relacionadas con precios de elementos del menú que no se manejan. Contactar para validar si tiene dificultades"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                        }
+                    ]
+                };
+            }
+        }
+
+         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
+
         sessionAttributes.orden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
@@ -1522,6 +1562,46 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
 
         console.log("Valor de la respuesta obtenida:", respuesta)
 
+        // Si el elemento no existe, manejar el conteo de fallbacks
+        if (!respuesta.elementoExiste) {
+            // Incrementar el contador de fallbacks
+            if (!sessionAttributes.fallbackCount) {
+                sessionAttributes.fallbackCount = 1;
+            } else {
+                sessionAttributes.fallbackCount++;
+            }
+
+            console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+            // Si se alcanza el máximo de fallbacks, transferir a agente humano
+            if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        },
+                        sessionAttributes: {
+                            ...sessionAttributes,
+                            requiresHumanIntervention: true,
+                            reason: "El cliente realizó multiples intentos para obtener respuestas relacionadas con elementos del menu. Contactar para validar si tiene dificultades"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                        }
+                    ]
+                };
+            }
+        }
+
+         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
+        
         sessionAttributes.orden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
@@ -2308,14 +2388,16 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
     Tu tarea es:
     1. Responder preguntas específicas sobre el menú
     2. Ser flexible con la escritura/ortografía de los nombres de los platillos
-    3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir algo similar del menú disponible
+    3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir que pregunte por el menu
     4. NO listar el menú completo, solo responder sobre los elementos específicos por los que se pregunta
     5. Incluir precios y detalles relevantes de los elementos consultados
+    6. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
 
     Formato de respuesta:
     {
         "mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado",
-        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)"
+        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
+        "elementoExiste": true/false
     }
     `;
 
@@ -2371,11 +2453,13 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
     4. Mantener las respuestas concisas y enfocadas en los precios
     5. Si el cliente pregunta por varios elementos, listar los precios de todos los elementos mencionados
     6. No incluir descripciones detalladas de los platillos, solo nombres y precios
+    7. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
 
     Formato de respuesta:
     {
         "mensaje": "Tu respuesta aquí, mencionando solo los precios de los elementos consultados"
-        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)"
+        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
+        "elementoExiste": true/false
     }
     `;
 
