@@ -228,6 +228,11 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
             let fallbackMessage = await generarMensajeFallback(userInput, intentInfo);
             console.log("Contenido de fallbackMessage generado desde OpenAI: ", fallbackMessage);
 
+            let messages = fallbackMessage.mensajes.map(msg => ({
+                contentType: "PlainText",
+                content: msg.mensaje
+            }));
+
             return {
                 sessionState: {
                     dialogAction: {
@@ -239,12 +244,7 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
                     },
                     sessionAttributes: sessionAttributes
                 },
-                messages: [
-                    {
-                        contentType: "PlainText",
-                        content: fallbackMessage.mensaje
-                    }
-                ]
+                messages: messages
             };
     }
 }
@@ -1559,10 +1559,16 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
-        // Generar respuesta personalizada sobre precios
+        // Obtener el mensaje de consulta de precios para elementos del menu
         const respuesta = await generarRespuestaPreciosMenu(userInput, menuData);
+        console.log("Mensajes de Consulta Precios Elementos Menu:", respuesta);
 
-        console.log("Valor de la respuesta obtenida:", respuesta)
+        // Construir mensajes para la respuesta
+        const messages = respuesta.mensajes.map(msg => ({
+            contentType: "PlainText",
+            content: msg.mensaje
+        }));
+
 
         // Si el elemento no existe, manejar el conteo de fallbacks
         if (!respuesta.elementoExiste) {
@@ -1619,12 +1625,7 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
                 },
                 sessionAttributes: sessionAttributes
             },
-            messages: [
-                {
-                    contentType: "PlainText",
-                    content: respuesta.mensaje
-                }
-            ]
+            messages: messages
         };
     } catch (error) {
         console.error("Error al procesar la consulta de precios:", error);
@@ -1661,10 +1662,17 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
-        // Generar respuesta personalizada basada en la consulta del usuario
-        const respuesta = await generarRespuestaElementoMenu(userInput, menuData);
 
-        console.log("Valor de la respuesta obtenida:", respuesta)
+        // Obtener el mensaje de consulta de elementos del menu
+        const respuesta = await generarRespuestaElementoMenu(userInput, menuData);
+        console.log("Mensajes de Consulta Elementos Menu:", respuesta);
+
+        // Construir mensajes para la respuesta
+        const messages = respuesta.mensajes.map(msg => ({
+            contentType: "PlainText",
+            content: msg.mensaje
+        }));
+
 
         // Si el elemento no existe, manejar el conteo de fallbacks
         if (!respuesta.elementoExiste) {
@@ -1721,12 +1729,7 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
                 },
                 sessionAttributes: sessionAttributes
             },
-            messages: [
-                {
-                    contentType: "PlainText",
-                    content: respuesta.mensaje
-                }
-            ]
+            messages: messages
         };
     } catch (error) {
         console.error("Error al procesar la consulta del elemento del menú:", error);
@@ -2354,14 +2357,26 @@ async function interpretarIntent(userInput) {
 }
 
 async function generarMensajeFallback(userInput, intentInfo) {
-    const systemPrompt = `
-    Eres un asistente de chatbot para un restaurante. Tu tarea es generar un mensaje amigable y apropiado cuando un usuario solicita algo que no está dentro de las capacidades o servicios del restaurante.
 
-    El mensaje debe ser corto, claro y educado, explicando de manera sencilla que la solicitud no puede ser procesada, pero ofreciendo una alternativa o sugerencia cuando sea posible.
+    let contextoRestaurante = await getInicio();
+
+    const systemPrompt = `
+    Eres un chatbot para un restaurante especializado en generar mensajes de fallback precisos y útiles.
+
+    Reglas estrictas:
+    - Máximo 20 palabras por mensaje
+    - Si el mensaje supera 20 palabras, dividirlo en múltiples mensajes
+    - SOLO sugiere consultar el menú
+    - No menciones reservas, horarios u otros servicios no definidos
+    - Mantén un tono amigable y profesional
+    - Basate en la información del restaurante: ${JSON.stringify(contextoRestaurante, null, 2)}
 
     Formato de respuesta:
     {
-        "mensaje": "Aquí va el mensaje de fallback generado por usted"
+        "mensajes": [
+            {"mensaje": "Primer mensaje fallback"},
+            {"mensaje": "Segundo mensaje (opcional, si es necesario)"}
+        ]
     }
     `;
 
@@ -2494,12 +2509,19 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
     2. Ser flexible con la escritura/ortografía de los nombres de los platillos
     3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir que pregunte por el menu
     4. NO listar el menú completo, solo responder sobre los elementos específicos por los que se pregunta
-    5. Incluir precios y detalles relevantes de los elementos consultados
-    6. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
+    5. Incluir detalles relevantes de los elementos consultados y tambien incitar de alguna manera al cliente a comprar.
+    6. Si el cliente pregunta por varios elementos, darle respuesta acorde a lo que solicita
+    7. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
+
+    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
+    Si se llega a 20 palabras, generar un nuevo mensaje
 
     Formato de respuesta:
     {
-        "mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado",
+        "mensajes": [
+            {"mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado"},
+            {"mensaje": "Segundo mensaje o mas si es necesario"},
+        ],
         "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
         "elementoExiste": true/false
     }
@@ -2553,15 +2575,21 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
     Tu tarea es:
     1. Responder ÚNICAMENTE sobre los precios de los elementos consultados
     2. Ser flexible con la escritura/ortografía de los nombres de los platillos
-    3. Si el cliente pregunta por algo que no está en el menú, indicar amablemente que ese elemento no está disponible
-    4. Mantener las respuestas concisas y enfocadas en los precios
+    3. Si el cliente pregunta por algo que no está en el menú, indicar amablemente que ese elemento no está disponible y sugerirle que consulte el menu
+    4. Mantener las respuestas concisas, enfocadas en los precios pero que tambien inciten de alguna manera al cliente a comprar.
     5. Si el cliente pregunta por varios elementos, listar los precios de todos los elementos mencionados
     6. No incluir descripciones detalladas de los platillos, solo nombres y precios
     7. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
 
+    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
+    Si se llega a 20 palabras, generar un nuevo mensaje
+
     Formato de respuesta:
     {
-        "mensaje": "Tu respuesta aquí, mencionando solo los precios de los elementos consultados"
+        "mensajes": [
+            {"mensaje": "Tu respuesta aquí, mencionando solo los precios de los elementos consultados"},
+            {"mensaje": "Segundo mensaje o mas si es necesario"},
+        ],
         "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
         "elementoExiste": true/false
     }
