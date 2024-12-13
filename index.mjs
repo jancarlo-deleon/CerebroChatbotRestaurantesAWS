@@ -455,11 +455,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
 
         // Verificar datos del cliente primero
-        const requiredSlots = [
-            'nombreCliente',
-            'telefonoCliente',
-            'direccionEntrega'
-        ];
+        const requiredSlots = ['nombreCliente', 'telefonoCliente', 'direccionEntrega'];
 
         // Verificar cada slot y solicitar el primero que falte
         for (const slotName of requiredSlots) {
@@ -499,16 +495,125 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         sessionAttributes.telefonoCliente = slots.telefonoCliente.value.interpretedValue;
         sessionAttributes.direccionEntrega = slots.direccionEntrega.value.interpretedValue;
 
-        // Recuperar el input inicial para procesar la orden
-        userInput = sessionAttributes.initialInput;
-        console.log("Recuperando input inicial para procesar:", userInput);
-
-        console.log("Preparando respuesta para ordenar");
-
-        console.log("Input de Entrada del usuario:", userInput);
+        let userInputAux = sessionAttributes.initialInput;
+        console.log("*** Recuperando input inicial AUX para procesar:", userInputAux);
 
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
+
+
+        // Verificar si estamos esperando una selección específica
+        if (sessionAttributes.esperandoSeleccionCategoria) {
+
+            if (sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica) {
+
+                console.log("Procesando selección de categoría previa:", sessionAttributes.categoriaPrevia);
+                // Concatenar la categoría previa con la selección actual
+                userInput = `${sessionAttributes.initialInput} ${userInput}`;
+                // Limpiar flags de categoría
+                delete sessionAttributes.esperandoSeleccionCategoria;
+                delete sessionAttributes.categoriaPrevia;
+                delete sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica;
+
+                console.log('[-] Atributos de sesión actuales procesando Solicitud Categoria General o especifica:', JSON.stringify(sessionAttributes, null, 2));
+
+                // Continuar con el flujo normal
+                console.log("Input concatenado para procesar (desde procesando Categoria General o Solicitud Especifica):", userInput);
+            } else {
+
+                // Recuperar el input inicial para procesar la orden
+                userInput = sessionAttributes.initialInput;
+                console.log("*** Recuperando input inicial para procesar:", userInput);
+
+                console.log("** Preparando respuesta para ordenar");
+
+                console.log("* Input de Entrada del usuario:", userInput);
+
+                // Limpiar flags de categoría
+                delete sessionAttributes.esperandoSeleccionCategoria;
+                delete sessionAttributes.categoriaPrevia;
+                delete sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica;
+
+                console.log('[-] Atributos de sesión actuales procesando Solicitud Categoria General o especifica:', JSON.stringify(sessionAttributes, null, 2));
+
+            }
+
+            console.log("El input FINAL para proceseguir es el siguiente:", userInput);
+
+        } else {
+
+            // Verificar si es una solicitud de categoría
+            const categoriaCheck = await verificarSiEsCategoria(userInputAux);
+
+            if (categoriaCheck.esCategoria) {
+                console.log("Se detectó solicitud de categoría:", categoriaCheck.categoria);
+
+                // Obtener opciones del menú
+                const opcionesMenu = await obtenerOpcionesPorCategoria(categoriaCheck.categoria, menuData);
+
+                if (!opcionesMenu) {
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "Close"
+                            },
+                            intent: {
+                                name: event.sessionState.intent.name,
+                                state: "Failed"
+                            }
+                        },
+                        messages: [{
+                            contentType: "PlainText",
+                            content: `Una disculpa, no encontré opciones de ${categoriaCheck.categoria} en nuestro menú.`,
+                        },
+                        
+                        {
+                            contentType: "PlainText",
+                            content: `¡Te invito a que puedas consultarlo para que puedas realizar tu orden!`,
+                        }
+                    ]
+                    };
+                }
+
+                // Guardar la categoría en la sesión
+                sessionAttributes.categoriaPrevia = categoriaCheck.categoria;
+                sessionAttributes.esperandoSeleccionCategoria = true;
+                sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica = true;
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "ordenUsuario"
+                        },
+                        intent: {
+                            name: "OrdenarIntent",
+                            slots: slots,
+                            state: "InProgress"
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: `Estas son nuestras opciones:\n${opcionesMenu}\n\n¿Cuál te gustaría ordenar?`
+                        }
+                    ]
+                };
+
+            } else {
+
+                // Recuperar el input inicial para procesar la orden
+                userInput = sessionAttributes.initialInput;
+                console.log("*** Recuperando input inicial para procesar (cuando esCateogoria es FALSE):", userInput);
+
+                console.log("** Preparando respuesta para ordenar");
+
+                console.log("* Input de Entrada del usuario (cuando esCateogoria es FALSE):", userInput);
+
+            }
+
+        }
 
         // Verificar si hay un elemento previo guardado en la sesión
         const elementoPrevio = sessionAttributes.orden;
@@ -581,9 +686,9 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             } else {
                 sessionAttributes.fallbackCount++;
             }
-    
+
             console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
-    
+
             if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
                 return {
                     sessionState: {
@@ -2060,6 +2165,34 @@ async function handleConectarAAgenteIntent(event, sessionAttributes, userInput) 
     };
 }
 
+//Verificar si las solicitudes son generales o especificas
+async function obtenerOpcionesPorCategoria(categoria, menuData) {
+
+    // Verificar si menuData está definido y es un array
+    if (!menuData || !Array.isArray(menuData)) {
+        console.error("menuData no es válido:", menuData);
+        return null;
+    }
+
+
+    // Filtrar elementos del menú que coincidan con la categoría
+    const opciones = menuData.filter(item =>
+        item['Nombre del Platillo']?.toLowerCase().includes(categoria.toLowerCase()) ||
+        item['Descripcion']?.toLowerCase().includes(categoria.toLowerCase())
+    );
+
+    if (opciones.length === 0) {
+        return null;
+    }
+
+    // Formatear las opciones para mostrarlas al usuario
+    const mensaje = opciones.map(item =>
+        `● ${item['Nombre del Platillo']} - ${item['Precio']}\n${item['Descripcion'] || ''}`
+    ).join('\n\n');
+
+    return mensaje;
+}
+
 
 //Metodos para usar sheet.best
 async function getInicio() {
@@ -3274,5 +3407,63 @@ async function extraerInformacionEnvioCliente(userInput) {
     } catch (error) {
         console.error("Error al procesar input con OpenAI:", error);
         return null;
+    }
+}
+
+async function verificarSiEsCategoria(userInput) {
+    const systemPrompt = `Eres un asistente especializado en analizar pedidos de restaurante.
+    Tu tarea es determinar si el input del usuario es una solicitud general de categoría
+    (por ejemplo: "quiero una pizza", "quisiera una hamburguesa") o si es una solicitud específica
+    (por ejemplo: "quiero una pizza de pepperoni", "dame una hamburguesa clásica").
+    
+    
+    `;
+
+    const userPrompt = `Analiza el siguiente pedido y determina si es una solicitud general de categoría:
+    "${userInput}"
+    
+    Responde con un objeto JSON con este formato exacto:
+    {
+        "esCategoria": boolean,
+        "categoria": "string con la categoría identificada o null si no es una categoría",
+        "razon": "explicación breve de la decisión"
+    }
+        
+    NOTA IMPORTANTE: Si el cliente escribe algo como "quiero ordenar", "me pueden tomar la orden" y entre otras palabras o frases que practicamente
+    solo denotan la intencion de ordenar, NO COLOCARLOS COMO esCategoria = TRUE ya que no es para nada una categoria, solo es intencion
+    de que le tomen la orden.
+
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT para verificar si es solicitud general o especifica:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+
+        return JSON.parse(response.data.choices[0].message.content);
+    } catch (error) {
+        console.error("Error al verificar categoría:", error);
+        throw error;
     }
 }
