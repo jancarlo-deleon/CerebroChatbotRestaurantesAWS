@@ -110,6 +110,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'ConsultaElementosMismaCategoriaIntent') {
+        console.log("Se esta activando esta parte por medio de ConsultaElementosMismaCategoriaIntent");
+
+        return handleConsultaCategoriaMenuIntent(event, sessionAttributes, userInput);
+
+    }
+
     const chatGPTResponse = await interpretarIntent(userInput);
 
     // Extraer el JSON de la respuesta de ChatGPT
@@ -170,6 +177,10 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
         case 'handleConsultaElementosMenuIntent':
             console.log("Se estará redirigiendo hacia handleConsultaElementosMenuIntent");
             return handleConsultaElementosMenuIntent(event, sessionAttributes, intentInfo, userInput);
+
+        case 'handleConsultaCategoriaMenuIntent':
+            console.log("Se estará redirigiendo hacia handleConsultaCategoriaMenuIntent");
+            return handleConsultaCategoriaMenuIntent(event, sessionAttributes, userInput);
 
         case 'handleAgradecimientoIntent':
             console.log("Se estará redirigiendo hacia handleAgradecimientoIntent");
@@ -566,12 +577,12 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                             contentType: "PlainText",
                             content: `Una disculpa, no encontré opciones de ${categoriaCheck.categoria} en nuestro menú.`,
                         },
-                        
+
                         {
                             contentType: "PlainText",
                             content: `¡Te invito a que puedas consultarlo para que puedas realizar tu orden!`,
                         }
-                    ]
+                        ]
                     };
                 }
 
@@ -615,9 +626,11 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
         }
 
+        console.log('[--] Atributos de sesión actuales Antes de verificar si es orden direceta:', JSON.stringify(sessionAttributes, null, 2));
+
         // Verificar si hay un elemento previo guardado en la sesión
-        const elementoPrevio = sessionAttributes.orden;
-        console.log("Existe elemento previo? :", elementoPrevio)
+        const elementoPrevio = sessionAttributes.categoriaPrevia ? sessionAttributes.categoriaPrevia + " " + sessionAttributes.orden : sessionAttributes.orden;
+        console.log("Valor de elemento previo:", elementoPrevio);
 
         if (elementoPrevio) {
 
@@ -1716,6 +1729,7 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
 
         sessionAttributes.orden = respuesta.nombreElemento;
+        sessionAttributes.imagenParaOrden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
 
@@ -1820,6 +1834,7 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
 
         sessionAttributes.orden = respuesta.nombreElemento;
+        sessionAttributes.imagenParaOrden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
 
@@ -1855,6 +1870,121 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
                 {
                     contentType: "PlainText",
                     content: "Lo siento, hubo un problema al consultar el elemento del menú que mencionas. Por favor, intenta nuevamente en unos momentos."
+                }
+            ]
+        };
+    }
+}
+
+async function handleConsultaCategoriaMenuIntent(event, sessionAttributes) {
+    console.log('=== Inicio de handleConsultaCategoriaMenuIntent ===');
+    let userInput = event.inputTranscript.toLowerCase();
+    console.log("Input obtenido de la conversación: ", userInput);
+    console.log('[-] Atributos de sesión iniciales:', JSON.stringify(sessionAttributes, null, 2));
+
+    try {
+        // Obtener datos del menú
+        const menuData = await getMenu();
+        console.log('[-] Datos del menú obtenidos:', menuData ? 'OK' : 'Error');
+
+        // Verificar si es una solicitud de categoría
+        const categoriaCheck = await verificarSiEsCategoria(userInput);
+        console.log('[-] Resultado verificación de categoría:', categoriaCheck);
+
+        // Si es una nueva consulta de categoría
+        if (categoriaCheck.esCategoria) {
+            console.log('[-] Procesando nueva consulta de categoría:', categoriaCheck.categoria);
+
+            const opcionesMenu = await obtenerOpcionesPorCategoria(categoriaCheck.categoria, menuData);
+            console.log('[-] Opciones de menú encontradas:', opcionesMenu ? 'OK' : 'No encontradas');
+
+            if (!opcionesMenu) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: `Lo siento, no encontré opciones de ${categoriaCheck.categoria} en nuestro menú.`
+                        }
+                    ]
+                };
+            }
+
+            // Guardar la categoría en la sesión
+            sessionAttributes.categoriaPrevia = categoriaCheck.categoria;
+            console.log('[-] Categoría guardada en sesión:', sessionAttributes.categoriaPrevia);
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Fulfilled"
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: `Estas son nuestras opciones de ${categoriaCheck.categoria} :`
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: `${opcionesMenu}`
+                    }
+                ]
+            };
+        } else {
+
+            // Si no es una categoría válida
+            console.log('[-] Input no reconocido como categoría válida');
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Por favor, especifica qué tipo de productos te gustaría consultar (por ejemplo: pizzas, hamburguesas, etc)."
+                    }
+                ]
+            };
+
+        }
+
+
+    } catch (error) {
+        console.error("Error en handleConsultaCategoriaMenuIntent:", error);
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                }
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un error al procesar tu consulta. Por favor, intenta nuevamente."
                 }
             ]
         };
@@ -2052,10 +2182,10 @@ async function handleVisualizarIntent(event, sessionAttributes, userInput) {
 
         let imagenElemento;
 
-        if (sessionAttributes.orden) {
+        if (sessionAttributes.imagenParaOrden) {
             // Buscar la imagen que coincida parcialmente con el nombre del orden de atributo de sesion
             imagenElemento = imagenesData.find(imagen =>
-                imagen.Nombre.toLowerCase().includes(sessionAttributes.orden.toLowerCase())
+                imagen.Nombre.toLowerCase().includes(sessionAttributes.imagenParaOrden.toLowerCase())
             );
             console.log("Valor de imagenElemento usando orden de atributo de sesion:", imagenElemento);
         } else {
@@ -2174,23 +2304,90 @@ async function obtenerOpcionesPorCategoria(categoria, menuData) {
         return null;
     }
 
+    console.log("Valor de Categoria a procesar para obtener opciones:",categoria);
 
-    // Filtrar elementos del menú que coincidan con la categoría
-    const opciones = menuData.filter(item =>
-        item['Nombre del Platillo']?.toLowerCase().includes(categoria.toLowerCase()) ||
-        item['Descripcion']?.toLowerCase().includes(categoria.toLowerCase())
-    );
+    try {
 
-    if (opciones.length === 0) {
+        const systemPrompt = `Eres un asistente especializado en análisis de menús de restaurante.
+        Tu tarea es identificar coincidencias entre la búsqueda del usuario y los elementos del menú,
+        considerando:
+        - Variaciones ortográficas (ej: spaghetti/espagueti/espagetti)
+        - Plurales y singulares
+        - Palabras con/sin acentos
+        - Términos relacionados o similares`;
+
+        const userPrompt = `Analiza esta búsqueda: "${categoria}"
+        
+        Menú disponible:
+        ${JSON.stringify(menuData, null, 2)}
+
+        Devuelve un JSON con este formato:
+        {
+            "matchedItems": ["nombre_platillo1", "nombre_platillo2"],
+            "categoriaPlatillo": " (Si por ejemplo en matchetItems se obtiene Spaghetti Carbonara, aqui se colo solo Spaghetti. Si fuera Lasagna Boloñesa, aqui solo se coloca Lasagna, etc.)"
+            "confidence": number // 0-1 que indica la confianza de las coincidencias
+        }`;
+
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("---Valor de la respuesta para obtenerOpcionesPorCategoria apoyandose de ChatGPT ---");
+        console.log(response.data.choices[0].message.content);
+        console.log("------------------------------------------------------------------------------------");
+
+        const responseContent = response.data.choices[0].message.content.trim();
+
+        // Asegurarse de que solo estamos parseando el JSON
+        let jsonResponse;
+
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            jsonResponse = JSON.parse(jsonMatch[0]);
+        } else {
+            throw new Error("No se pudo extraer JSON válido de la respuesta");
+        }
+
+        console.log("Valor de jsonResponse: ", jsonResponse);
+
+        // Filtrar el menú basado en los items coincidentes
+        const opciones = menuData.filter(item =>
+            item['Nombre del Platillo'].toLowerCase().includes(jsonResponse.categoriaPlatillo.toLowerCase())
+        );
+
+        if (opciones.length === 0) {
+            return null;
+        }
+
+        // Formatear las opciones para mostrarlas al usuario
+        const mensaje = opciones.map(item =>
+            `● ${item['Nombre del Platillo']} - ${item['Precio']}\n${item['Descripcion'] || ''}`
+        ).join('\n\n');
+
+        return mensaje;
+
+
+    } catch (error) {
+        console.error("Error al procesar la categoría:", error);
         return null;
     }
 
-    // Formatear las opciones para mostrarlas al usuario
-    const mensaje = opciones.map(item =>
-        `● ${item['Nombre del Platillo']} - ${item['Precio']}\n${item['Descripcion'] || ''}`
-    ).join('\n\n');
-
-    return mensaje;
 }
 
 
@@ -2406,6 +2603,10 @@ async function interpretarIntent(userInput) {
     12. Visualizar Elemento del Menu
         - INCLUYE: Deseo del cliente de querer ver/visualizar una foto/imagen del elemento del menu
         - EJEMPLOS: "me lo puedes mostrar", "quiero ver como es la pizza", "puedo ver fotos?"
+    
+    13. Consulta de Elementos de una Categoria del Menu
+        - INCLUYE: Preguntas sobre platos o elementos del menu de manera general
+        - EJEMPLOS: "qué pizzas ofrecen", "que hamburguesas tienen", "cuales helados manejan", "que tipos de tacos manejan"
 
     REGLAS CRÍTICAS DE CATEGORIZACIÓN:
 
@@ -2445,6 +2646,7 @@ async function interpretarIntent(userInput) {
         - Metodos de Envío -> handleMetodosDeEnvioIntent
         - Finalizar Orden -> handleFinalizarOrdenIntent
         - Visualizar Elemento del Menu -> handleVisualizarIntent
+        - Consulta de Elementos de una Categoria del Menu -> handleConsultaCategoriaMenuIntent
     }
 
     Para categorías inválidas:
@@ -3432,6 +3634,9 @@ async function verificarSiEsCategoria(userInput) {
     NOTA IMPORTANTE: Si el cliente escribe algo como "quiero ordenar", "me pueden tomar la orden" y entre otras palabras o frases que practicamente
     solo denotan la intencion de ordenar, NO COLOCARLOS COMO esCategoria = TRUE ya que no es para nada una categoria, solo es intencion
     de que le tomen la orden.
+
+    Tambien por ejemplo, teniendo en cuenta una Pizza Margarita, si se escribe algo como "quiero una margarita", ESTO NO ES VALIDO COMO CATEGORIA DE PIZZA,
+    ya que no esta diciendo margarita de que. Si dijera "quiero una pizza", eso SÍ ES VALIDO.
 
     `;
 
