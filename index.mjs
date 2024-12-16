@@ -2304,66 +2304,17 @@ async function obtenerOpcionesPorCategoria(categoria, menuData) {
         return null;
     }
 
-    console.log("Valor de Categoria a procesar para obtener opciones:",categoria);
+    console.log("Valor de Categoria a procesar para obtener opciones:", categoria);
 
     try {
 
-        const systemPrompt = `Eres un asistente especializado en análisis de menús de restaurante.
-        Tu tarea es identificar coincidencias entre la búsqueda del usuario y los elementos del menú,
-        considerando:
-        - Variaciones ortográficas (ej: spaghetti/espagueti/espagetti)
-        - Plurales y singulares
-        - Palabras con/sin acentos
-        - Términos relacionados o similares`;
+        // Llamar a la función para interpretar la categoría
+        const jsonResponse = await interpretarCategoriaMenu(categoria, menuData);
 
-        const userPrompt = `Analiza esta búsqueda: "${categoria}"
-        
-        Menú disponible:
-        ${JSON.stringify(menuData, null, 2)}
-
-        Devuelve un JSON con este formato:
-        {
-            "matchedItems": ["nombre_platillo1", "nombre_platillo2"],
-            "categoriaPlatillo": " (Si por ejemplo en matchetItems se obtiene Spaghetti Carbonara, aqui se colo solo Spaghetti. Si fuera Lasagna Boloñesa, aqui solo se coloca Lasagna, etc.)"
-            "confidence": number // 0-1 que indica la confianza de las coincidencias
-        }`;
-
-        const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: userPrompt
-                }
-            ],
-            temperature: 0.3
-        }, {
-            headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        console.log("---Valor de la respuesta para obtenerOpcionesPorCategoria apoyandose de ChatGPT ---");
-        console.log(response.data.choices[0].message.content);
-        console.log("------------------------------------------------------------------------------------");
-
-        const responseContent = response.data.choices[0].message.content.trim();
-
-        // Asegurarse de que solo estamos parseando el JSON
-        let jsonResponse;
-
-        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            jsonResponse = JSON.parse(jsonMatch[0]);
-        } else {
-            throw new Error("No se pudo extraer JSON válido de la respuesta");
+        if (!jsonResponse) {
+            return null;
         }
-
+        
         console.log("Valor de jsonResponse: ", jsonResponse);
 
         // Filtrar el menú basado en los items coincidentes
@@ -3670,5 +3621,73 @@ async function verificarSiEsCategoria(userInput) {
     } catch (error) {
         console.error("Error al verificar categoría:", error);
         throw error;
+    }
+}
+
+async function interpretarCategoriaMenu(categoria, menuData) {
+    const systemPrompt = `Eres un asistente especializado en análisis de menús de restaurante.
+    Tu tarea es identificar coincidencias entre la búsqueda del usuario y los elementos del menú,
+    considerando:
+    - Variaciones ortográficas (ej: spaghetti/espagueti/espagetti)
+    - Plurales y singulares
+    - Palabras con/sin acentos
+    - Términos relacionados o similares`;
+
+    const userPrompt = `Analiza esta búsqueda: "${categoria}"
+    
+    Menú disponible:
+    ${JSON.stringify(menuData, null, 2)}
+
+    Devuelve un JSON con este formato:
+    {
+        "matchedItems": ["nombre_platillo1", "nombre_platillo2"],
+        "categoriaPlatillo": " (Si por ejemplo en matchetItems se obtiene Spaghetti Carbonara, aqui se coloca solo Spaghetti. Si fuera Lasagna Boloñesa, aqui solo se coloca Lasagna, etc.)"
+        "confidence": number // 0-1 que indica la confianza de las coincidencias
+    }`;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("---Valor de la respuesta para interpretar_categoria_menu apoyandose de ChatGPT ---");
+        console.log(response.data.choices[0].message.content);
+        console.log("------------------------------------------------------------------------------------");
+
+        const responseContent = response.data.choices[0].message.content.trim();
+
+        // Asegurarse de que solo estamos parseando el JSON
+        let jsonResponse;
+
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            jsonResponse = JSON.parse(jsonMatch[0]);
+        } else {
+            throw new Error("No se pudo extraer JSON válido de la respuesta");
+        }
+
+        console.log("Valor de jsonResponse: ", jsonResponse);
+
+        return jsonResponse;
+
+    } catch (error) {
+        console.error("Error al procesar la categoría:", error);
+        return null;
     }
 }
