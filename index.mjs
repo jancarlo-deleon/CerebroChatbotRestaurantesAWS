@@ -668,7 +668,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                     messages: [
                         {
                             contentType: "PlainText",
-                            content: "¿Qué te gustaría ordenar?"
+                            content: "¿Qué te gustaría ordenar el día de hoy?"
                         }
                     ]
                 };
@@ -1391,7 +1391,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
             },
             {
                 contentType: "PlainText",
-                content: "Muchas gracias por tu preferencia."
+                content: "¡Muchas gracias por tu preferencia!"
             },
             {
                 contentType: "PlainText",
@@ -1543,7 +1543,7 @@ async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo) {
                     },
                     {
                         contentType: "PlainText",
-                        content: "Si deseas realiar alguna otra acción, con gusto puedes indicármelo"
+                        content: "Si deseas que te dé información sobre alguno de nuestros platillos o si quieres ordenar nuevamente, con gusto puedes indicármelo"
                     }
                 ]
             };
@@ -1570,7 +1570,7 @@ async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo) {
                     },
                     {
                         contentType: "PlainText",
-                        content: "Si gustas hacer alguna otra acción, estoy a la orden"
+                        content: "Si gustas agregar algo o consultar por algo mas, estoy a la orden"
                     }
 
                 ]
@@ -1604,7 +1604,7 @@ async function handleConsultarMenuIntent(event, sessionAttributes, userInput) {
         // Agregar mensaje inicial
         mensajes.push({
             contentType: "PlainText",
-            content: "Aquí te comparto nuestro menú:"
+            content: "Te envío el menú ahora mismo."
         });
 
         //Agregar imagen del menú
@@ -1624,7 +1624,7 @@ async function handleConsultarMenuIntent(event, sessionAttributes, userInput) {
         // Agregar mensaje final
         mensajes.push({
             contentType: "PlainText",
-            content: "¿Te gustaría ordenar algo o tienes alguna pregunta sobre nuestros platillos?"
+            content: "¿Algo en particular que estés buscando?"
         });
 
 
@@ -2557,7 +2557,7 @@ async function interpretarIntent(userInput) {
     
     13. Consulta de Elementos de una Categoria del Menu
         - INCLUYE: Preguntas sobre platos o elementos del menu de manera general
-        - EJEMPLOS: "qué pizzas ofrecen", "que hamburguesas tienen", "cuales helados manejan", "que tipos de tacos manejan"
+        - EJEMPLOS: "qué pizzas ofrecen", "que hamburguesas tienen", "cuales helados manejan", "que tipos de tacos manejan", "que precio tienen las pizzas", "cuanto vale la hamburguesa?"
 
     REGLAS CRÍTICAS DE CATEGORIZACIÓN:
 
@@ -2645,6 +2645,7 @@ async function interpretarIntent(userInput) {
 async function generarMensajeFallback(userInput, intentInfo) {
 
     let contextoRestaurante = await getInicio();
+    let contextoMenu = await getMenu();
 
     const systemPrompt = `
     Eres un chatbot para un restaurante especializado en generar mensajes de fallback precisos y útiles.
@@ -2664,6 +2665,19 @@ async function generarMensajeFallback(userInput, intentInfo) {
             {"mensaje": "Segundo mensaje (opcional, si es necesario)"}
         ]
     }
+
+
+    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
+
+    Cliente: "¿Qué dia es hoy?"
+    Chatbot: "No estoy seguro, pero si tienes hambre, este es el momento perfecto para pedir algo rico. ¿Te ayudo con el menú?"
+
+    Cliente: "¿Qué hora es?"
+    Chatbot: "Soy un asistente especializado en ayudarte con pedidos. Si necesitas algo del menú, estoy aquí para ayudarte. 😊"
+
+    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
+    con el cliente justo como esas que tienes de ejemplo.
+
     `;
 
     let userPrompt;
@@ -2727,6 +2741,7 @@ async function generarMensajeBienvenida(userInput) {
     - Tercer mensaje: Invitación a explorar el menú o hacer un pedido
 
     Y basate en la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
+    NOTA: Estandariza usar el nombre del restaurante con solo inical mayuscula. No lo generes todo con mayusculas
 
     Formato de respuesta:
     {
@@ -2736,6 +2751,19 @@ async function generarMensajeBienvenida(userInput) {
             {"mensaje": "Tercer mensaje corto"}
         ]
     }
+
+    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
+
+    Cliente: "Hola", "Buenas", "Quiero hacer un pedido."
+	Respuesta del chatbot:
+	"¡Hola! 😊 Bienvenido/a [Aqui va el nombre del restaurante], ¿qué te gustaría pedir hoy?"
+
+    Cliente: "Hola, buenos días."
+    Chatbot: "¡Hola, buenos días! Qué gusto saludarte. ¿Cómo te ayudo hoy?"
+    
+    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
+    con el cliente justo como esas que tienes de ejemplo.
+
     `;
 
     const userPrompt = `
@@ -2811,6 +2839,20 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
         "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
         "elementoExiste": true/false
     }
+
+    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
+
+    Cliente: "¿Qué ingredientes tiene la pizza de carnes?"
+    Chatbot: "Lleva pepperoni, salchicha, jamón y carne molida. Si te gustan las pizzas bien cargadas, esta es la ideal. ¿Te animas?"
+
+    Cliente: "¿Cómo es el combo 3?"
+    Chatbot: "Incluye una pizza grande, palitos de ajo y un refresco de 1.5 litros. Perfecto para compartir. ¿Quieres uno?"
+
+    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
+    con el cliente justo como esas que tienes de ejemplo.
+
+    
+    NOTA: Si te piden mucha informacion, puedes generar mas de 2 mensajes, con tal de generar una buena respuesta.
     `;
 
     const userPrompt = `
@@ -2863,9 +2905,8 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
     2. Ser flexible con la escritura/ortografía de los nombres de los platillos
     3. Si el cliente pregunta por algo que no está en el menú, indicar amablemente que ese elemento no está disponible y sugerirle que consulte el menu
     4. Mantener las respuestas concisas, enfocadas en los precios pero que tambien inciten de alguna manera al cliente a comprar.
-    5. Si el cliente pregunta por varios elementos, listar los precios de todos los elementos mencionados
-    6. No incluir descripciones detalladas de los platillos, solo nombres y precios
-    7. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
+    5. No incluir descripciones detalladas de los platillos, solo nombres y precios
+    6. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
 
     IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
     Si se llega a 20 palabras, generar un nuevo mensaje
@@ -2879,6 +2920,17 @@ async function generarRespuestaPreciosMenu(userInput, menuData) {
         "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
         "elementoExiste": true/false
     }
+
+    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
+
+    Cliente: "¿Cuánto cuesta la [nombre del platillo]?"
+    Chatbot: "Está en $[precio del platillo]. Es una de nuestras favoritas. ¿te gustaria ordenarla?"
+
+    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
+    con el cliente justo como esas que tienes de ejemplo.
+
+    Y SIEMPRE INCITA A QUE EL CLIENTE ORDENE
+
     `;
 
     const userPrompt = `
@@ -2934,6 +2986,21 @@ async function generarMensajeAgradecimiento(userInput) {
     {
         "mensaje": "Aquí va tu respuesta al agradecimiento"
     }
+
+
+    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
+
+    Cliente: "Muchas gracias por la ayuda."
+    Chatbot: "¡De nada! . Aquí estoy para cualquier otra cosa."
+
+    Cliente: "Gracias por tu tiempo."
+    Chatbot: "Es un gusto ayudarte. Espero que tengas un excelente día."
+
+    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
+    con el cliente justo como esas que tienes de ejemplo.
+
+
+
     `;
 
     const userPrompt = `
