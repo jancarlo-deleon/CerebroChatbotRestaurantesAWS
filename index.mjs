@@ -2314,8 +2314,6 @@ async function obtenerOpcionesPorCategoria(categoria, menuData) {
         if (!jsonResponse) {
             return null;
         }
-        
-        console.log("Valor de jsonResponse: ", jsonResponse);
 
         // Filtrar el menú basado en los items coincidentes
         const opciones = menuData.filter(item =>
@@ -2373,14 +2371,10 @@ export async function getMenu() {
     console.log("Iniciando consulta a la hoja 'MENU'");
 
     try {
-        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/MENU`);
-        console.log("Respuesta completa de la hoja 'MENU':", response.data);
+        const menu = await axios.get(`${SHEET_BEST_API_URL}/tabs/MENU`);
+        console.log("Respuesta completa de la hoja 'MENU':", menu);
 
-        //Obtener datos 
-        const menu = response.data;
-        console.log("Datos del menú a partir de la fila A2:", menu);
-
-        return menu;
+        return menu.data;
     } catch (error) {
         console.error("Error al obtener datos de la hoja 'MENU':", error);
         throw error;
@@ -2486,129 +2480,41 @@ async function buscarClienteExistente(nombre, telefono) {
     }
 }
 
+async function getPrompts(functionName) {
+    console.log(`Iniciando consulta a la hoja 'PROMPTS' para la función: ${functionName}`);
+
+    try {
+        // Obtenemos todos los prompts de la hoja
+        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/PROMPTS`);
+
+        // Buscar el prompt específico para la función solicitada
+        const promptData = response.data.find(row => row['Nombre Funcion'] === functionName);
+        console.log(`Data encontrada a partir del nombre de funcion ${functionName} :`, promptData);
+
+        if (!promptData) {
+            throw new Error(`No se encontraron prompts para la función: ${functionName}`);
+        }
+
+        return {
+            systemPrompt: promptData['System Prompt'],
+            userPrompt: promptData['User Prompt']
+        };
+    } catch (error) {
+        console.error(`Error al obtener prompts para la función ${functionName}:`, error);
+        throw error;
+    }
+}
+
 
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
 async function interpretarIntent(userInput) {
-    const systemPrompt = `Eres un asistente altamente especializado en la interpretación de intenciones para un chatbot de restaurante. 
-    Tu única función es categorizar precisamente las intenciones del usuario en categorías predefinidas.
 
-    CATEGORÍAS PERMITIDAS Y SUS DEFINICIONES ESPECÍFICAS:
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('interpretarIntent');
 
-    1. Saludo
-       - INCLUYE: Saludos iniciales, presentaciones
-       - EJEMPLOS: "hola", "buenos días", "qué tal"
-       
-    2. Ordenar
-       - INCLUYE: Intención clara de hacer un pedido nuevo
-       - EJEMPLOS: "quiero ordenar", "deseo hacer un pedido", "quisiera pedir", "me puedes tomar el pedido"
-       
-    3. Agregar a Orden
-       - INCLUYE: Añadir items a un pedido existente
-       - EJEMPLOS: "también quiero agregar", "suma a mi pedido", "agrega una porción más", "añadir a mi orden/pedido"
-       
-    4. Cancelar Orden
-       - INCLUYE: Solicitudes explícitas de cancelación
-       - EJEMPLOS: "cancela mi pedido", "ya no quiero la orden", "anula mi pedido"
-       
-    5. Consulta de Menu
-       - INCLUYE: Preguntas sobre el menú completo
-       - EJEMPLOS: "muéstrame el menú", "qué tienen?", "cuál es su carta"
-       - NO INCLUYE: Preguntas sobre recomendaciones o items específicos
-       
-    6. Consulta de Precios
-       - INCLUYE: Preguntas específicas sobre costos
-       - EJEMPLOS: "cuánto cuesta", "precio de", "valor del"
-       
-    7. Consulta de elementos individuales del Menu
-       - INCLUYE: Preguntas sobre platos específicos
-       - EJEMPLOS: "qué lleva la hamburguesa", "cómo es el combo 1"
-       
-    8. Agradecimiento
-       - INCLUYE: Expresiones de gratitud
-       - EJEMPLOS: "gracias", "muchas gracias", "te lo agradezco"
-       
-    9. Metodos de Pago
-       - INCLUYE: Preguntas sobre formas de pago
-       - EJEMPLOS: "aceptan tarjeta", "puedo pagar con", "qué métodos de pago tienen"
-       
-    10. Metodos de Envío
-        - INCLUYE: Consultas sobre delivery o recojo
-        - EJEMPLOS: "hacen delivery", "puedo recoger", "cómo me lo envían"
-    
-    11. Finalizar Orden
-    - INCLUYE: 
-      * Solicitudes explícitas de terminar el pedido
-      * Indicaciones de que el pedido está completo
-      * Frases que sugieren conclusión del proceso de pedido
-      * Menciones de la intencion de querer pagar o confirmar la orden
-      * Expresiones que impliquen que no se desean más items
-    - EJEMPLOS: 
-      * "solo eso, gracias"
-      * "quiero finalizar mi orden" 
-      * "eso seria todo"
-      * "me gustaria pagar"
-      * "listo para pagar"
-      * "confirmar pedido"
-      * "estoy listo para pagar"
-    
-    12. Visualizar Elemento del Menu
-        - INCLUYE: Deseo del cliente de querer ver/visualizar una foto/imagen del elemento del menu
-        - EJEMPLOS: "me lo puedes mostrar", "quiero ver como es la pizza", "puedo ver fotos?"
-    
-    13. Consulta de Elementos de una Categoria del Menu
-        - INCLUYE: Preguntas sobre platos o elementos del menu de manera general
-        - EJEMPLOS: "qué pizzas ofrecen", "que hamburguesas tienen", "cuales helados manejan", "que tipos de tacos manejan", "que precio tienen las pizzas", "cuanto vale la hamburguesa?"
+    const systemPrompt = prompts.systemPrompt;
 
-    REGLAS CRÍTICAS DE CATEGORIZACIÓN:
-
-    1. De momento, NO categorizar preguntas sobre recomendaciones o sugerencias en ninguna categoría existente.
-    2. NO intentar interpretar intenciones que no coincidan exactamente con las categorías definidas.
-    3. Las preguntas sobre promociones, ofertas o recomendaciones NO deben categorizarse como consultas de menú.
-    4. Solo categorizar como "Ordenar" cuando hay una intención EXPLÍCITA de realizar un pedido.
-    5. CONTEXTO Y SEMÁNTICA:
-        - Analizar no solo palabras individuales, sino el contexto y la intención general
-        - Prestar especial atención a frases que impliquen conclusión del proceso de pedido
-    6. NO SUGIERAS COSAS QUE NO SE ESTAN TOMANDO EN CONSIDERACION DENTRE DE LAS CATEGORIAS. Ejemplo: sugerir horarios, promociones, reservas,etc.
-
-
-    IMPORTANTE: 
-        - Evaluar holísticamente la intención del usuario
-        - Priorizar la categoría que mejor capture el propósito final de la comunicación
-        - No sugieras en general alternativas que no estan dentro de las capacidades. Las capacidades son las 12 categorias, por lo mismo, no ofrezcas cosas como reservas, visitar pagina web, horarios, promociones y entre otras cosas.`;
-
-    const userPrompt = `Analiza el siguiente input y categorízalo según las reglas estrictas definidas:
-    "${userInput}"
-    
-    Debes responder únicamente con uno de estos dos formatos JSON:
-
-    Para categorías válidas:
-    {
-        "categoria": "[Categoría exacta de la lista]",
-        "handle": "[Handle correspondiente según esta lista:]"
-        - Saludo -> handleBienvenidaIntent
-        - Ordenar -> handleOrdenarIntent
-        - Agregar a Orden -> handleAgregarAOrdenarIntent
-        - Cancelar Orden -> handleCancelarOrdenIntent
-        - Consulta de Menu -> handleConsultarMenuIntent
-        - Consulta de Precios -> handleConsultaPreciosMenuIntent
-        - Consulta de elementos individuales del Menu -> handleConsultaElementosMenuIntent
-        - Agradecimiento -> handleAgradecimientoIntent
-        - Metodos de Pago -> handleMetodosDePagoIntent
-        - Metodos de Envío -> handleMetodosDeEnvioIntent
-        - Finalizar Orden -> handleFinalizarOrdenIntent
-        - Visualizar Elemento del Menu -> handleVisualizarIntent
-        - Consulta de Elementos de una Categoria del Menu -> handleConsultaCategoriaMenuIntent
-    }
-
-    Para categorías inválidas:
-    {
-        "categoriaInvalida": "No pertenece a ninguna categoria",
-        "mensaje": "[Mensaje corto y claro explicando por qué no podemos procesar esta solicitud]"
-    }
-
-    NOTA: no menciones nada relacionado con paginas web u otros medios para consultar informacion.
-
-    Responde ÚNICAMENTE con el JSON correspondiente, sin texto adicional ni marcadores de código.`;
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -2645,49 +2551,19 @@ async function interpretarIntent(userInput) {
 async function generarMensajeFallback(userInput, intentInfo) {
 
     let contextoRestaurante = await getInicio();
-    let contextoMenu = await getMenu();
 
-    const systemPrompt = `
-    Eres un chatbot para un restaurante especializado en generar mensajes de fallback precisos y útiles.
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarMensajeFallback');
 
-    Reglas estrictas:
-    - Máximo 20 palabras por mensaje
-    - Si el mensaje supera 20 palabras, dividirlo en múltiples mensajes
-    - SOLO sugiere consultar el menú
-    - No menciones reservas, horarios u otros servicios no definidos
-    - Mantén un tono amigable y profesional
-    - Basate en la información del restaurante: ${JSON.stringify(contextoRestaurante, null, 2)}
-
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {"mensaje": "Primer mensaje fallback"},
-            {"mensaje": "Segundo mensaje (opcional, si es necesario)"}
-        ]
-    }
-
-
-    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
-
-    Cliente: "¿Qué dia es hoy?"
-    Chatbot: "No estoy seguro, pero si tienes hambre, este es el momento perfecto para pedir algo rico. ¿Te ayudo con el menú?"
-
-    Cliente: "¿Qué hora es?"
-    Chatbot: "Soy un asistente especializado en ayudarte con pedidos. Si necesitas algo del menú, estoy aquí para ayudarte. 😊"
-
-    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
-    con el cliente justo como esas que tienes de ejemplo.
-
-    `;
+    // Reemplazar variables en el system prompt
+    const systemPrompt = prompts.systemPrompt.replace(
+        '${JSON.stringify(contextoRestaurante, null, 2)}',
+        JSON.stringify(contextoRestaurante, null, 2)
+    );
 
     let userPrompt;
     if (intentInfo.categoriaInvalida) {
-        userPrompt = `
-        El usuario ha hecho la siguiente solicitud que no pertenece a ninguna categoría válida:
-        "${userInput}"
-
-        Por favor, genera un mensaje de fallback apropiado que explique de manera amigable por qué no podemos procesar esta solicitud, y si es posible, ofrece una alternativa o sugerencia.
-        `;
+        userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
     } else {
         userPrompt = `
         Hubo un error al procesar la intención del usuario. Genera un mensaje de fallback apropiado.
@@ -2730,55 +2606,15 @@ async function generarMensajeBienvenida(userInput) {
 
     let contextoRestaurante = await getInicio();
 
-    const systemPrompt = `
-    Eres un chatbot amigable para un restaurante. Tu tarea es generar mensajes de bienvenida cálidos y acogedores.
-    Debes mencionar que puedes ayudar a tomar pedidos y responder preguntas sobre el menú.
-    Las respuestas deben ser breves pero acogedoras.
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarMensajeBienvenida');
 
-    Genera una serie de mensajes cortos que se puedan enviar secuencialmente:
-    - Primer mensaje: Saludo inicial
-    - Segundo mensaje: Breve descripción de servicios
-    - Tercer mensaje: Invitación a explorar el menú o hacer un pedido
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(contextoRestaurante, null, 2)}',
+        JSON.stringify(contextoRestaurante, null, 2));
 
-    Y basate en la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
-    NOTA: Estandariza usar el nombre del restaurante con solo inical mayuscula. No lo generes todo con mayusculas
-
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {"mensaje": "Primer mensaje corto"},
-            {"mensaje": "Segundo mensaje corto"},
-            {"mensaje": "Tercer mensaje corto"}
-        ]
-    }
-
-    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
-
-    Cliente: "Hola", "Buenas", "Quiero hacer un pedido."
-	Respuesta del chatbot:
-	"¡Hola! 😊 Bienvenido/a [Aqui va el nombre del restaurante], ¿qué te gustaría pedir hoy?"
-
-    Cliente: "Hola, buenos días."
-    Chatbot: "¡Hola, buenos días! Qué gusto saludarte. ¿Cómo te ayudo hoy?"
-    
-    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
-    con el cliente justo como esas que tienes de ejemplo.
-
-    `;
-
-    const userPrompt = `
-    El cliente ha iniciado una conversación o ha saludado con el siguiente mensaje:
-    "${userInput}"
-
-    Genera mensajes de bienvenida que:
-    1. Saluden de manera cálida
-    2. Mencionen que puedes ayudar con pedidos
-    3. Inviten al cliente a preguntar sobre el menú
-    
-    Las respuestas deben ser concisas, variadas y divididas en 3 mensajes cortos.
-
-    NO USES EMOJIS.
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -2814,53 +2650,16 @@ async function generarMensajeBienvenida(userInput) {
 
 
 async function generarRespuestaElementoMenu(userInput, menuData) {
-    const systemPrompt = `
-    Eres un asistente de restaurante amigable y servicial. Tienes acceso al siguiente menú actualizado:
-    ${JSON.stringify(menuData, null, 2)}
 
-    Tu tarea es:
-    1. Responder preguntas específicas sobre el menú
-    2. Ser flexible con la escritura/ortografía de los nombres de los platillos
-    3. Si el cliente pregunta por algo que no está en el menú, indicarlo amablemente y opcionalmente sugerir que pregunte por el menu
-    4. NO listar el menú completo, solo responder sobre los elementos específicos por los que se pregunta
-    5. Incluir detalles relevantes de los elementos consultados y tambien incitar de alguna manera al cliente a comprar.
-    6. Si el cliente pregunta por varios elementos, darle respuesta acorde a lo que solicita
-    7. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarRespuestaElementoMenu');
 
-    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
-    Si se llega a 20 palabras, generar un nuevo mensaje
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuData, null, 2)}',
+        JSON.stringify(menuData, null, 2));
 
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {"mensaje": "Tu respuesta aquí, mencionando los detalles relevantes del elemento consultado"},
-            {"mensaje": "Segundo mensaje o mas si es necesario"},
-        ],
-        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
-        "elementoExiste": true/false
-    }
-
-    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
-
-    Cliente: "¿Qué ingredientes tiene la pizza de carnes?"
-    Chatbot: "Lleva pepperoni, salchicha, jamón y carne molida. Si te gustan las pizzas bien cargadas, esta es la ideal. ¿Te animas?"
-
-    Cliente: "¿Cómo es el combo 3?"
-    Chatbot: "Incluye una pizza grande, palitos de ajo y un refresco de 1.5 litros. Perfecto para compartir. ¿Quieres uno?"
-
-    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
-    con el cliente justo como esas que tienes de ejemplo.
-
-    
-    NOTA: Si te piden mucha informacion, puedes generar mas de 2 mensajes, con tal de generar una buena respuesta.
-    `;
-
-    const userPrompt = `
-    El cliente ha realizado la siguiente consulta sobre el menú:
-    "${userInput}"
-    
-    Por favor, genera una respuesta apropiada siguiendo las instrucciones dadas.
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -2896,49 +2695,16 @@ async function generarRespuestaElementoMenu(userInput, menuData) {
 }
 
 async function generarRespuestaPreciosMenu(userInput, menuData) {
-    const systemPrompt = `
-    Eres un asistente de restaurante especializado en informar sobre precios. Tienes acceso al siguiente menú actualizado:
-    ${JSON.stringify(menuData, null, 2)}
 
-    Tu tarea es:
-    1. Responder ÚNICAMENTE sobre los precios de los elementos consultados
-    2. Ser flexible con la escritura/ortografía de los nombres de los platillos
-    3. Si el cliente pregunta por algo que no está en el menú, indicar amablemente que ese elemento no está disponible y sugerirle que consulte el menu
-    4. Mantener las respuestas concisas, enfocadas en los precios pero que tambien inciten de alguna manera al cliente a comprar.
-    5. No incluir descripciones detalladas de los platillos, solo nombres y precios
-    6. Agregar un campo booleano 'elementoExiste' para indicar si el elemento consultado está en el menú
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarRespuestaPreciosMenu');
 
-    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
-    Si se llega a 20 palabras, generar un nuevo mensaje
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuData, null, 2)}',
+        JSON.stringify(menuData, null, 2));
 
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {"mensaje": "Tu respuesta aquí, mencionando solo los precios de los elementos consultados"},
-            {"mensaje": "Segundo mensaje o mas si es necesario"},
-        ],
-        "nombreElemento": "Nombre exacto del elemento del menú consultado (si aplica)",
-        "elementoExiste": true/false
-    }
-
-    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
-
-    Cliente: "¿Cuánto cuesta la [nombre del platillo]?"
-    Chatbot: "Está en $[precio del platillo]. Es una de nuestras favoritas. ¿te gustaria ordenarla?"
-
-    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
-    con el cliente justo como esas que tienes de ejemplo.
-
-    Y SIEMPRE INCITA A QUE EL CLIENTE ORDENE
-
-    `;
-
-    const userPrompt = `
-    El cliente ha realizado la siguiente consulta sobre precios:
-    "${userInput}"
-    
-    Por favor, genera una respuesta enfocada únicamente en los precios solicitados.
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -2977,47 +2743,15 @@ async function generarMensajeAgradecimiento(userInput) {
 
     let contextoRestaurante = await getInicio();
 
-    const systemPrompt = `
-    Eres un chatbot amable para un restaurante. El restaurante tiene la siguiente informacion: ${JSON.stringify(contextoRestaurante, null, 2)}
-    Tu tarea es generar respuestas variadas y amigables a los agradecimientos de los clientes.
-    Las respuestas deben ser breves, cordiales y mantener un tono positivo.
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarMensajeAgradecimiento');
 
-    Formato de respuesta:
-    {
-        "mensaje": "Aquí va tu respuesta al agradecimiento"
-    }
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(contextoRestaurante, null, 2)}',
+        JSON.stringify(contextoRestaurante, null, 2));
 
-
-    A continuación, te comparto ejemplos de posibles interacciones, para que las tengas de referencia y dar una respuesta similar con el mismo tono:
-
-    Cliente: "Muchas gracias por la ayuda."
-    Chatbot: "¡De nada! . Aquí estoy para cualquier otra cosa."
-
-    Cliente: "Gracias por tu tiempo."
-    Chatbot: "Es un gusto ayudarte. Espero que tengas un excelente día."
-
-    Utiliza los ejemplos que te pase como referencia para generar siempre respuestas variadas pero que en esencia tengan una interaccion de respuesta
-    con el cliente justo como esas que tienes de ejemplo.
-
-
-
-    `;
-
-    const userPrompt = `
-    El cliente ha expresado agradecimiento con el siguiente mensaje:
-    "${userInput}"
-
-    Por favor, genera una respuesta amable y cordial que transmita que estamos contentos de poder ayudar.
-    La respuesta debe ser breve y natural.
-
-    NO digas hola cada vez que generes el mensaje.
-
-    NO USES EMOJIS.
-
-    Y trata de que no siempre se genere el mismo mensaje, sino que sea variado.
-
-
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3055,45 +2789,15 @@ async function generarMensajeMetodosDePago(userInput) {
     // Obtener el contexto específico del restaurante
     let contextoRestaurante = await getInicio();
 
-    const systemPrompt = `
-    Eres un chatbot especializado en informar sobre opciones de metodo de pago para un restaurante específico.
-    Debes generar una respuesta personalizada basada en la información del restaurante.
-    
-    Información del restaurante: ${JSON.stringify(contextoRestaurante, null, 2)}
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarMensajeMetodosDePago');
 
-    Genera una respuesta dividida en varios mensajes que:
-    1. Explique brevemente las opciones de metodo de pago
-    2. Invite a realizar un pedido
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(contextoRestaurante, null, 2)}',
+        JSON.stringify(contextoRestaurante, null, 2));
 
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {"mensaje": "Primer mensaje sobre métodos de pago"},
-            {"mensaje": "Segundo mensaje para Invitar a realizar un pedido"},
-        ]
-    }
-
-    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
-
-    `;
-
-
-    const userPrompt = `
-    El cliente ha preguntado sobre las opciones de metodo de pago con el siguiente mensaje:
-    "${userInput}"
-
-    Al generar la respuesta, considera:
-    - Mencionar específicamente las opciones de pago, los cuales son efectivo, tarjeta y pago contra entrega
-    - Utilizar información contextual del restaurante para personalizar la respuesta
-    - Ser claro, conciso y amigable
-    - Variar la redacción para que no sean siempre los mismos mensajes
-    - No usar información que no esté confirmada en el contexto del restaurante
-
-    Recuerda:
-    - NO digas hola cada vez que generes el mensaje
-    - NO USES EMOJIS
-    - Sé natural y conversacional
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3131,44 +2835,15 @@ async function generarMensajeMetodosDeEnvio(userInput) {
     // Obtener el contexto específico del restaurante
     let contextoRestaurante = await getInicio();
 
-    const systemPrompt = `
-    Eres un chatbot especializado en informar sobre opciones de entrega para un restaurante específico.
-    Debes generar una respuesta personalizada basada en la información del restaurante.
-    
-    Información del restaurante: ${JSON.stringify(contextoRestaurante, null, 2)}
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('generarMensajeMetodosDeEnvio');
 
-    Genera una respuesta dividida en varios mensajes que:
-    1. Explique brevemente las opciones de entrega
-    2. Invite a realizar un pedido
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(contextoRestaurante, null, 2)}',
+        JSON.stringify(contextoRestaurante, null, 2));
 
-    Formato de respuesta:
-    {
-        "mensajes": [
-            {"mensaje": "Primer mensaje sobre métodos de entrega"},
-            {"mensaje": "Segundo mensaje para Invitar a realizar un pedido"},
-        ]
-    }
-
-    IMPORTANTE: Se deben de tener entre 16 a 20 palabras por mensaje. 20 es el máximo, asi que no lo superes.
-
-    `;
-
-    const userPrompt = `
-    El cliente ha preguntado sobre las opciones de entrega con el siguiente mensaje:
-    "${userInput}"
-
-    Al generar la respuesta, considera:
-    - Mencionar específicamente las opciones de entrega a domicilio y recoger en el establecimiento
-    - Utilizar información contextual del restaurante para personalizar la respuesta
-    - Ser claro, conciso y amigable
-    - Variar la redacción para que no sean siempre los mismos mensajes
-    - No usar información que no esté confirmada en el contexto del restaurante
-
-    Recuerda:
-    - NO digas hola cada vez que generes el mensaje
-    - NO USES EMOJIS
-    - Sé natural y conversacional
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3210,33 +2885,15 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
         Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
     }));
 
-    const systemPrompt = `Eres un asistente especializado en tomar órdenes para un restaurante.
-    Tienes acceso al siguiente menú actualizado:
-    ${JSON.stringify(menuPreprocesado, null, 2)}
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('llamadaAChatGPTParaOrdenar');
 
-    Tu tarea es tomar la orden del usuario pero SOLO PUEDES TOMAR ORDENES QUE SI TENGAN ELEMENTOS QUE ESTEN PRESENTES EN EL MENU QUE SE TE HA COMPARTIDO
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuPreprocesado, null, 2)}',
+        JSON.stringify(menuPreprocesado, null, 2));
 
-    Solo puedes procesar órdenes que incluyan estos productos exactos. 
-    Y tambien puedes procesar comentarios, los cuales serian cosas extras que pediría el cliente como por ejemplo servilletas o si desea agregar algun ingrediente o quitar y entre otras cosas
-    Igual puedes procesar si se escriben de manera distinta los elementos del menu, ya sea que sean variaciones en su escritura pero que hagan referencia valida a algo del menu
-    Toda escritura que haga referencia al menu es válida.`;
-
-    const userPrompt = `Analiza el siguiente pedido  y extrae la información relevante:
-    "${userInput}"
-    
-    Debes responder con un objeto JSON.
-
-    El objeto JSON de respuesta tiene que contener exactamente estas propiedades:
-    {
-        "orden": "Solo incluir un resumen conciso del pedido, debe incluir algo como: '(nombre del elemento del menu) - (cantidad de unidades) unidad(es)'. Si la orden incluye varios elementos del menu, se deben de separar por coma. Despues del valor de la cantidad mira si es necesario colocar unidad o unidades dependiendo de la cantidad de elementos que se piden del elemento del menu",
-        "totalUnidades": "suma total de unidades pedidas",
-        "comentarios": "información adicional sobre especificaciones del cliente",
-        "totalCosto": "cálculo del costo total basado en los precios del menu que se te compartió"
-    }
-
-    Realiza el cálculo de manera precisa y sin redondeos adicionales. Respeta los precios exactos del menú compartido.
-
-    Solo responde con el objeto JSON, sin texto adicional ni marcadores de código.`;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3278,39 +2935,21 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
         Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
     }));
 
-    const systemPrompt = `Eres un asistente especializado en tomar órdenes para un restaurante.
-    Tienes acceso al siguiente menú actualizado:
-    ${JSON.stringify(menuPreprocesado, null, 2)}
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('llamadaAChatGPTParaAgregarAOrden');
 
-    Tu tarea es añadir elementos a la orden del usuario pero SOLO PUEDES PROCESAR SOLICITUDES RELACIONADAS CON AÑADIR A LA ORDEN QUE SI TENGAN ELEMENTOS QUE ESTEN PRESENTES EN EL MENU QUE SE TE HA COMPARTIDO
+    // Reemplazar variables en el system prompt
+    const systemPrompt = prompts.systemPrompt
+        .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
+            JSON.stringify(menuPreprocesado, null, 2));
 
-    Solo puedes procesar órdenes que incluyan estos productos exactos. 
-    Y tambien puedes procesar comentarios, los cuales serian cosas extras que pediría el cliente como por ejemplo servilletas o si desea agregar algun ingrediente o quitar y entre otras cosas
-    Tu tarea es procesar adiciones a órdenes existentes, sumando las nuevas cantidades a las existentes y tambien en caso se indique, remover elementos de la orden y actualizar la informacion.
-    Tambien debes ajustar el total del costo a pagar`;
-
-    const userPrompt = `Analiza el siguiente pedido para añadir a una orden existente:
-    
-    Orden actual:
-    - Orden: ${ordenActual.orden}
-    - Total unidades actuales: ${ordenActual.totalUnidades}
-    - Total costo actual: $${ordenActual.totalCosto}
-    - Comentarios actuales: ${ordenActual.comentarios}
-
-    Pedido adicional del cliente:
-    "${userInput}"
-    
-    Debes devolver un objeto JSON exactamente con estas propiedades:
-    {
-        "orden": "Al resumen que ya se tenia en ordenActual.orden, agregarle lo que interpretes que se esta agregando a la orden. Usa el mismo formato que ya usa ordenActual.orden",
-        "totalUnidades": "suma TOTAL de todas las unidades (existentes + nuevas)",
-        "comentarios": "combina los comentarios existentes con los nuevos si los hay",
-        "totalCosto": "cálculo del costo total que ya se tenia mas la suma de lo que se acaba de agregar, basado en los precios del menu que se te compartió"
-    }
-
-    Realiza el cálculo de manera precisa y sin redondeos adicionales. Respeta los precios exactos del menú compartido.
-
-    Solo responde con el objeto JSON, sin texto adicional ni marcadores de código.`;
+    // Reemplazar variables en el user prompt
+    const userPrompt = prompts.userPrompt
+        .replace('${ordenActual.orden}', ordenActual.orden)
+        .replace('${ordenActual.totalUnidades}', ordenActual.totalUnidades)
+        .replace('${ordenActual.totalCosto}', ordenActual.totalCosto)
+        .replace('${ordenActual.comentarios}', ordenActual.comentarios)
+        .replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3355,39 +2994,14 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
 async function verificarSiEsOrdenDirecta(userInput) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en analizar si un texto contiene una orden directa para ordenar o añadir algo.
 
-        Debes verificar si el texto se considera o no como una orden directa.
+        // Obtener los prompts desde Google Sheets
+        const prompts = await getPrompts('verificarSiEsOrdenDirecta');
 
-        Para saber si es directa o no, ten en cuenta lo siguiente:
+        const systemPrompt = prompts.systemPrompt;
 
-        1. **Se considera una orden directa si:**
-            - El texto tiene más de 16 caracteres (incluyendo espacios).
-            - El contenido del texto especifica directamente algo que se desea ordenar o añadir/agregar. 
-            Ejemplo: 
-            - "Me gustaría añadir unas papas" (ORDEN DIRECTA porque especifica qué añadir).
-            - "Quiero ordenar una pizza" (ORDEN DIRECTA porque menciona directamente el elemento a ordenar).
-
-        2. **No se considera una orden directa si:**
-            - El texto solo denota una intención general sin especificar lo que se desea ordenar o añadir/agregar.
-            Ejemplo:
-            - "Hola, me gustaría añadir algo a mi orden" (NO ES ORDEN DIRECTA porque no especifica qué añadir).
-            - "Hola, me gustaría ordenar por favor" (NO ES ORDEN DIRECTA porque no menciona qué ordenar).
-
-        3. **Si no se cumplen las condiciones anteriores, entonces NO ES UNA ORDEN DIRECTA.**
-
-        Se flexible y acepta sinonimos de palabras para ordenar o añadir/agregar algo a la orden.
-
-        Sé riguroso y responde basándote estrictamente en estas condiciones.`;
-
-        const userPrompt = `Analiza el siguiente texto y determina si es una orden directa o no:
-        "${userInput}"
-        
-        Responde solo con un objeto JSON con este formato:
-        {
-            "isDirectOrder": boolean,
-            "reason": "Explicación breve de por qué es o no una orden directa"
-        }`;
+        // Reemplazar variables en el user prompt si es necesario
+        const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
         const response = await axios.post(OPENAI_API_URL, {
             model: "gpt-4o-mini",
@@ -3430,44 +3044,16 @@ async function verificarSiEsOrdenDirecta(userInput) {
 async function verificarSiEsOrdenValida(userInput, menuData) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en analizar órdenes de menú con un enfoque altamente flexible. 
-        Tus objetivos son:
 
-        Identificar elementos del menú con máxima flexibilidad:
-        - Ignora diferencias de mayúsculas/minúsculas
-        - Acepta variaciones con/sin acentos
-        - Permite singular/plural
-        - Tolera pequeñas variaciones ortográficas
-        - Compara esencia del producto, no exactitud literal
+        // Obtener los prompts desde Google Sheets
+        const prompts = await getPrompts('verificarSiEsOrdenValida');
 
-        Menú disponible:
-        ${JSON.stringify(menuData, null, 2)}
+        // Reemplazar variables en el system prompt si es necesario
+        const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuData, null, 2)}',
+            JSON.stringify(menuData, null, 2));
 
-        Criterios de validación:
-        - Prioriza la coincidencia sustancial sobre la precisión literal
-        - Verifica que cada elemento mencionado exista en el menú
-        - Sé generoso en la interpretación, pero mantén rigor en la validación
-        `;
-
-        const userPrompt = `Analiza el siguiente texto de orden con MÁXIMA FLEXIBILIDAD:
-        "${userInput}"
-        
-        Instrucciones para tu respuesta:
-        - Evalúa si TODOS los elementos mencionados corresponden al menú
-        - Usa un criterio amplio de coincidencia
-        - Si hay al menos una coincidencia parcial razonable con un elemento del menú, considera la orden VÁLIDA
-        - La cantidad de elementos no es relevante para la validez
-
-        Responde ÚNICAMENTE con este JSON:
-        {
-            "isValidOrder": boolean,
-            "reason": "Explicación breve de la validación"
-        }
-
-        IMPORTANTE: 
-        - Sé extremadamente flexible en la comparación
-        - Prioriza la intención sobre la exactitud
-        `;
+        // Reemplazar variables en el user prompt si es necesario
+        const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
         const response = await axios.post(OPENAI_API_URL, {
             model: "gpt-4o-mini",
@@ -3510,26 +3096,14 @@ async function verificarSiEsOrdenValida(userInput, menuData) {
 async function verificarConfirmacion(userInput) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en analizar texto para confimar cancelaciones de ordenes con un enfoque altamente flexible. 
-        
-        A partir del input que se te comparta, debes evaluarlo y concluir si lo que el input contiene es una afirmacion o no.
 
-        Cualquier indicio de que se este confirmando la accion que describa el input, se considera como válida.
+        // Obtener los prompts desde Google Sheets
+        const prompts = await getPrompts('verificarConfirmacion');
 
-        `;
+        const systemPrompt = prompts.systemPrompt;
 
-        const userPrompt = `Analiza el siguiente texto con MÁXIMA FLEXIBILIDAD:
-        "${userInput}"
-        
-        Evalua si el texto indica si se esta confirmando, afirmando, etc. 
-
-        Responde ÚNICAMENTE con este JSON:
-        {
-            "isConfirmacion": boolean,
-            "reason": "Explicación breve de la validación"
-        }
-
-        `;
+        // Reemplazar variables en el user prompt si es necesario
+        const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
         const response = await axios.post(OPENAI_API_URL, {
             model: "gpt-4o-mini",
@@ -3572,25 +3146,14 @@ async function verificarConfirmacion(userInput) {
 async function extraerInformacionEnvioCliente(userInput) {
 
     try {
-        const systemPrompt = `Eres un asistente especializado en extraer información de pedidos para un restaurante.
-        Debes analizar el texto del cliente y extraer la siguiente información si está presente:
-        - Nombre del cliente
-        - Número de teléfono
-        - Método de pago (efectivo o tarjeta)
-        - Dirección de entrega o si pasa a recoger
 
-        Debes ser flexible en la interpretación pero preciso en la extracción.`;
+        // Obtener los prompts desde Google Sheets
+        const prompts = await getPrompts('extraerInformacionEnvioCliente');
 
-        const userPrompt = `Analiza el siguiente texto y extrae la información del pedido:
-        "${userInput}"
-        
-        Responde solo con un objeto JSON con este formato:
-        {
-            "nombreCliente": "nombre completo, o sea nombre ya apellidos. Si se encuentran ambos. Devuelve null si no",
-            "telefonoCliente": "número de telefono si se encuentra, null si no",
-            "metodoPago": "método de pago si se encuentra, null si no",
-            "direccionEntrega": "dirección de entrega o la indicacion de pasar a recoger al establecimiento si se encuentra, null si no"
-        }`;
+        const systemPrompt = prompts.systemPrompt;
+
+        // Reemplazar variables en el user prompt si es necesario
+        const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
         const response = await axios.post(OPENAI_API_URL, {
             model: "gpt-4o-mini",
@@ -3631,32 +3194,14 @@ async function extraerInformacionEnvioCliente(userInput) {
 }
 
 async function verificarSiEsCategoria(userInput) {
-    const systemPrompt = `Eres un asistente especializado en analizar pedidos de restaurante.
-    Tu tarea es determinar si el input del usuario es una solicitud general de categoría
-    (por ejemplo: "quiero una pizza", "quisiera una hamburguesa") o si es una solicitud específica
-    (por ejemplo: "quiero una pizza de pepperoni", "dame una hamburguesa clásica").
-    
-    
-    `;
 
-    const userPrompt = `Analiza el siguiente pedido y determina si es una solicitud general de categoría:
-    "${userInput}"
-    
-    Responde con un objeto JSON con este formato exacto:
-    {
-        "esCategoria": boolean,
-        "categoria": "string con la categoría identificada o null si no es una categoría",
-        "razon": "explicación breve de la decisión"
-    }
-        
-    NOTA IMPORTANTE: Si el cliente escribe algo como "quiero ordenar", "me pueden tomar la orden" y entre otras palabras o frases que practicamente
-    solo denotan la intencion de ordenar, NO COLOCARLOS COMO esCategoria = TRUE ya que no es para nada una categoria, solo es intencion
-    de que le tomen la orden.
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('verificarSiEsCategoria');
 
-    Tambien por ejemplo, teniendo en cuenta una Pizza Margarita, si se escribe algo como "quiero una margarita", ESTO NO ES VALIDO COMO CATEGORIA DE PIZZA,
-    ya que no esta diciendo margarita de que. Si dijera "quiero una pizza", eso SÍ ES VALIDO.
+    const systemPrompt = prompts.systemPrompt;
 
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3684,7 +3229,16 @@ async function verificarSiEsCategoria(userInput) {
         console.log(response.data.choices[0].message.content);
         console.log("--------------------------------------");
 
-        return JSON.parse(response.data.choices[0].message.content);
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        console.log("Valor de la respuesta limpia:", contenido)
+
+        return JSON.parse(contenido);
+
     } catch (error) {
         console.error("Error al verificar categoría:", error);
         throw error;
@@ -3692,25 +3246,16 @@ async function verificarSiEsCategoria(userInput) {
 }
 
 async function interpretarCategoriaMenu(categoria, menuData) {
-    const systemPrompt = `Eres un asistente especializado en análisis de menús de restaurante.
-    Tu tarea es identificar coincidencias entre la búsqueda del usuario y los elementos del menú,
-    considerando:
-    - Variaciones ortográficas (ej: spaghetti/espagueti/espagetti)
-    - Plurales y singulares
-    - Palabras con/sin acentos
-    - Términos relacionados o similares`;
 
-    const userPrompt = `Analiza esta búsqueda: "${categoria}"
-    
-    Menú disponible:
-    ${JSON.stringify(menuData, null, 2)}
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('interpretarCategoriaMenu');
 
-    Devuelve un JSON con este formato:
-    {
-        "matchedItems": ["nombre_platillo1", "nombre_platillo2"],
-        "categoriaPlatillo": " (Si por ejemplo en matchetItems se obtiene Spaghetti Carbonara, aqui se coloca solo Spaghetti. Si fuera Lasagna Boloñesa, aqui solo se coloca Lasagna, etc.)"
-        "confidence": number // 0-1 que indica la confianza de las coincidencias
-    }`;
+    const systemPrompt = prompts.systemPrompt;
+
+    // Reemplazar variables en el user prompt
+    const userPrompt = prompts.userPrompt
+        .replace('${categoria}',categoria)
+        .replace('${JSON.stringify(menuData, null, 2)}', JSON.stringify(menuData, null, 2));
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -3749,7 +3294,7 @@ async function interpretarCategoriaMenu(categoria, menuData) {
             throw new Error("No se pudo extraer JSON válido de la respuesta");
         }
 
-        console.log("Valor de jsonResponse: ", jsonResponse);
+        console.log("Valor de jsonResponse para interpretar CategoriaMenu: ", jsonResponse);
 
         return jsonResponse;
 
