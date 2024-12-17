@@ -99,7 +99,7 @@ export const handler = async (event) => {
     if (intentName == 'MetodosDeEnvioIntent') {
         console.log("Se esta activando esta parte por medio de MetodosDeEnvioIntent");
 
-        return handleMetodosDeEnvioIntent(event, sessionAttributes, userInput);
+        return handleMetodosDeEnvioIntent(event, sessionAttributes);
 
     }
 
@@ -192,7 +192,7 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
 
         case 'handleMetodosDeEnvioIntent':
             console.log("Se estará redirigiendo hacia handleMetodosDeEnvioIntent");
-            return handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput);
+            return handleMetodosDeEnvioIntent(event, sessionAttributes);
 
         case 'handleVisualizarIntent':
             return handleVisualizarIntent(event, sessionAttributes, userInput);
@@ -477,7 +477,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                 } else if (slotName === 'telefonoCliente') {
                     message = "¿Cuál es tu número de teléfono?";
                 } else if (slotName === 'direccionEntrega') {
-                    message = "¿Cuál sería tu dirección de entrega? También puedes indicar si prefieres recoger en el establecimiento.";
+                    message = "¿Cuál sería tu dirección de entrega?";
                 }
 
                 return {
@@ -2105,37 +2105,188 @@ async function handleMetodosDePagoIntent(event, sessionAttributes, userInput) {
 
 }
 
-async function handleMetodosDeEnvioIntent(event, sessionAttributes, intentInfo, userInput) {
+async function handleMetodosDeEnvioIntent(event, sessionAttributes) {
     console.log('=== Inicio de handleMetodosDeEnvioIntent ===');
     console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    let userInput = event.inputTranscript.toLowerCase();
+    console.log("[-] Input obtenido de la conversación: ", userInput);
     console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
 
     console.log("Preparando respuesta para metodos de envio");
 
     try {
+
+        // Obtener todos los costos de envío
+        const costosDeEnvio = await getCostosDeEnvio();
+
+        // Analizar si hay departamento en el input
+        const analisisDepartamento = await analizarDepartamentoEnInput(userInput, costosDeEnvio);
+
+        if (analisisDepartamento.encontrado == false && analisisDepartamento.departamento) {
+
+            console.log("No se encontró departamento, pero se capturo nombre de un departamento, asi que hay que tratarlo como invalido.");
+
+            return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Fulfilled"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: `Lo siento, actualmente no realizamos envíos a ${analisisDepartamento.departamento}. Si tienes otra ubicación en mente, puedes consultarme nuevamente.`
+                        }
+                    ]
+                };
+
+        }
+        
         // Obtener los mensajes de métodos de envío
         const mensajeMetodosDeEnvio = await generarMensajeMetodosDeEnvio(userInput);
         console.log("Mensajes de métodos de envío generados:", mensajeMetodosDeEnvio);
 
-        // Construir mensajes para la respuesta
-        const messages = mensajeMetodosDeEnvio.mensajes.map(msg => ({
-            contentType: "PlainText",
-            content: msg.mensaje
-        }));
 
-        return {
-            sessionState: {
-                dialogAction: {
-                    type: "Close"
+        if (analisisDepartamento.encontrado) {
+            console.log(" -- Se ha encontrado un departamento en el input, se procederá con el flujo correspondiente");
+
+            // Si se encontró el departamento en el input inicial
+            const departamento = analisisDepartamento.departamento;
+            console.log("Valor del departamento para buscar precio de envio:", departamento);
+            const costoEnvio = costosDeEnvio.find(c => c.Departamento === departamento);
+            console.log("El costo de envio es:", costoEnvio);
+
+            // Verificar si el departamento está en nuestra lista de envíos
+            if (!costoEnvio) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Fulfilled"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: `Lo siento, actualmente no realizamos envíos a ${departamento}. Si tienes otra ubicación en mente, puedes consultarme nuevamente.`
+                        }
+                    ]
+                };
+            }
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Fulfilled"
+                    },
+                    sessionAttributes: sessionAttributes
                 },
-                intent: {
-                    name: event.sessionState.intent.name,
-                    state: "Fulfilled"
-                },
-                sessionAttributes: sessionAttributes
-            },
-            messages: messages
-        };
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: `El envío a ${departamento} cuesta ${costoEnvio.Costo}.`
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: `Con gusto te puedo compartir el menú para que puedas ver nuestras opciones`
+                    }
+                ]
+            };
+
+        } else {
+            console.log("No se encontro un valor de departamento en el input inicial. Se procederá a capturar el valor");
+
+            // Si no se encontró departamento, verificar si ya tenemos el slot
+            const departamentoSlot = event.sessionState.intent.slots?.departamento;
+            console.log("Valor del departamento capturado:", departamentoSlot);
+
+            if (!departamentoSlot) {
+                console.log("Aun no se cuenta con un valor para el departamento. Se procederá a pedirlo");
+                // Si no tenemos el slot, pedirlo
+                const mensajeMetodosDeEnvio = await generarMensajeMetodosDeEnvio(userInput);
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "departamento"
+                        },
+                        intent: event.sessionState.intent
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: mensajeMetodosDeEnvio.mensajes[0].mensaje
+                        },
+                        {
+                            contentType: "PlainText",
+                            content: "¿Me puedes indicar en qué departamento te encuentras?, así te puedo indicar el costo de envío."
+                        }
+                    ]
+                };
+            } else {
+                console.log("En este punto, el slot ha sido capturado con un valor para el departamento");
+
+                // Si ya tenemos el slot, verificar si el departamento está disponible
+                const departamento = departamentoSlot.value.interpretedValue;
+                console.log("Valor del departamento para buscar precio de envio:", departamento);
+                const costoEnvio = costosDeEnvio.find(c => c.Departamento === departamento);
+                console.log("El costo de envio es:", costoEnvio);
+
+                if (!costoEnvio) {
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "Close"
+                            },
+                            intent: {
+                                name: event.sessionState.intent.name,
+                                state: "Fulfilled"
+                            }
+                        },
+                        messages: [
+                            {
+                                contentType: "PlainText",
+                                content: `Lo siento, actualmente no realizamos envíos a ${departamento}. Si tienes otra ubicación en mente, puedes consultarme nuevamente.`
+                            }
+                        ]
+                    };
+                }
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Fulfilled"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: `El envío a ${departamento} cuesta ${costoEnvio.Costo}.`
+                        },
+                        {
+                            contentType: "PlainText",
+                            content: `Con gusto te comparto el menú si deseas ordenar`
+                        }
+                    ]
+                };
+            }
+        }
+
     } catch (error) {
         console.error("Error en handleMetodosDeEnvioIntent:", error);
 
@@ -2505,6 +2656,23 @@ async function getPrompts(functionName) {
     }
 }
 
+
+async function getCostosDeEnvio() {
+    console.log(`Iniciando consulta a la hoja 'COSTO DE ENVIOS' :`);
+
+    try {
+        // Obtenemos todos los costos de envio de la hoja
+        const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/COSTO%20DE%20ENVIOS`);
+
+        const costoDeEnvio = response.data;
+
+        return costoDeEnvio;
+
+    } catch (error) {
+        console.error(`Error al obtener costos de envio:`, error);
+        throw error;
+    }
+}
 
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
 async function interpretarIntent(userInput) {
@@ -3254,7 +3422,7 @@ async function interpretarCategoriaMenu(categoria, menuData) {
 
     // Reemplazar variables en el user prompt
     const userPrompt = prompts.userPrompt
-        .replace('${categoria}',categoria)
+        .replace('${categoria}', categoria)
         .replace('${JSON.stringify(menuData, null, 2)}', JSON.stringify(menuData, null, 2));
 
     try {
@@ -3301,5 +3469,48 @@ async function interpretarCategoriaMenu(categoria, menuData) {
     } catch (error) {
         console.error("Error al procesar la categoría:", error);
         return null;
+    }
+}
+
+async function analizarDepartamentoEnInput(userInput, costosDeEnvio) {
+    try {
+
+        // Obtener los prompts desde Google Sheets
+        const prompts = await getPrompts('analizarDepartamentoEnInput');
+
+        const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(costosDeEnvio, null, 2)}',JSON.stringify(costosDeEnvio, null, 2));
+
+        // Reemplazar variables en el user prompt si es necesario
+        const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
+
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("---Valor de la respuesta para analizar presencia de departamentos apoyandose de ChatGPT ---");
+        console.log(response.data.choices[0].message.content);
+        console.log("-------------------------------------------------------------------------------------------");
+
+        return JSON.parse(response.data.choices[0].message.content);
+
+    } catch (error) {
+        console.error("Error al analizar departamento:", error);
+        throw error;
     }
 }
