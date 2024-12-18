@@ -473,7 +473,8 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             if (!isSlotComplete(slotName)) {
                 let message = "";
                 if (slotName === 'nombreCliente') {
-                    message = "Para empezar con tu orden, ¿podrías decirme tu nombre por favor?";
+                    message = "Para empezar con tu orden, te voy a solicitar tus datos para verificar cobertura de envio.";
+                    message += "\n\n ¿Podrías indicarme tu nombre por favor?";
                 } else if (slotName === 'telefonoCliente') {
                     message = "¿Cuál es tu número de teléfono?";
                 } else if (slotName === 'direccionEntrega') {
@@ -773,19 +774,13 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Construir los mensajes separados
         let mensajes = [];
 
-        // Agregar el resumen al primer mensaje
+        // Agregar el resumen 
         mensajes.push({
             contentType: "PlainText",
-            content: `Has pedido:\n\n${orderInfo.orden}`
+            content: `Confirmando tu orden, estaría conformada de la siguiente manera:\n\n ${orderInfo.orden}`
         });
 
-        // Agregar el total en un segundo mensaje
-        mensajes.push({
-            contentType: "PlainText",
-            content: `Total a pagar: $${orderInfo.totalCosto}`
-        });
-
-        // Agregar los comentarios como un tercer mensaje, si existen
+        // Agregar los comentarios, si existen
         if (orderInfo.comentarios) {
             mensajes.push({
                 contentType: "PlainText",
@@ -796,7 +791,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Mensaje adicional preguntando si necesita más ayuda
         mensajes.push({
             contentType: "PlainText",
-            content: "¿Hay algo más en lo que te pueda ayudar?"
+            content: "¿Quieres añadir algo más o pasar a finalizar tu orden?"
         });
 
         // Retornar el resultado con los mensajes construidos
@@ -1037,13 +1032,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         // Agregar el resumen al primer mensaje
         mensajes.push({
             contentType: "PlainText",
-            content: `Tu pedido actualizado es el siguiente:\n\n${orderInfo.orden}`
-        });
-
-        // Agregar el total en un segundo mensaje
-        mensajes.push({
-            contentType: "PlainText",
-            content: `Total a pagar: $${orderInfo.totalCosto}`
+            content: `Actualizando tu orden con lo que me mencionas, queda de la siguiente manera:\n\n${orderInfo.orden}`
         });
 
         // Agregar los comentarios como un tercer mensaje, si existen
@@ -1057,7 +1046,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         // Mensaje adicional preguntando si necesita más ayuda
         mensajes.push({
             contentType: "PlainText",
-            content: "¿Hay algo más en lo que te pueda ayudar?"
+            content: "¿Quieres añadir algo más o pasar a finalizar tu orden?"
         });
 
         // Retornar el resultado con los mensajes construidos
@@ -1205,27 +1194,37 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     // Verificar cada slot requerido y solicitar el primero que falte
     const requiredSlots = ['metodoPago'];
 
-    for (const slotName of requiredSlots) {
-        if (!isSlotComplete(slotName)) {
-            return {
-                sessionState: {
-                    dialogAction: {
-                        type: "ElicitSlot",
-                        slotToElicit: slotName
+    if (!sessionAttributes.metodoPago) {
+        for (const slotName of requiredSlots) {
+            if (!isSlotComplete(slotName)) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: slotName
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            slots: slots,
+                            state: "InProgress"
+                        },
+                        sessionAttributes: sessionAttributes
                     },
-                    intent: {
-                        name: event.sessionState.intent.name,
-                        slots: slots,
-                        state: "InProgress"
-                    },
-                    sessionAttributes: sessionAttributes
-                },
-                messages: [{
-                    contentType: "PlainText",
-                    content: "¿Cuál será tu método de pago?"
-                }]
-            };
+                    messages: [{
+                        contentType: "PlainText",
+                        content: "¿Cuál será tu método de pago?"
+                    }]
+                };
+            }
         }
+
+        console.log("Aqui ya se lleno el slot para metodoPago");
+        console.log("Valor capturado para metodo de pago: ", slots.metodoPago?.value?.interpretedValue);
+
+
+        console.log("Aun no se tiene el metodo de pago en la variable de sesion, se procederá a hacerlo");
+        sessionAttributes.metodoPago = slots.metodoPago?.value?.interpretedValue;
+        console.log("Valor de sessionAttributes.metodoPago:", sessionAttributes.metodoPago);
     }
 
     console.log("\n=== GENERANDO RESUMEN DE ORDEN ===");
@@ -1236,174 +1235,245 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
     sessionAttributes.numeroOrden = numeroOrden;
 
+    console.log("---Comenzando a crear el resumen---");
     // Crear mensaje de resumen
     const mensajeResumen = `
-    Tu orden es la #${numeroOrden} \n
+    Tu orden es la #${sessionAttributes.numeroOrden } \n
     
     • Nombre de quien recibe: ${sessionAttributes.nombreCliente} \n
     • Número de Teléfono: ${sessionAttributes.telefonoCliente} \n
     • Entrega: ${sessionAttributes.direccionEntrega} \n
     • Orden: ${sessionAttributes.orden} \n
     • Comentarios: ${sessionAttributes.comentariosOrden || 'Sin comentarios'} \n
-    • Método de pago: ${slots.metodoPago.value.interpretedValue} \n
+    • Método de pago: ${sessionAttributes.metodoPago} \n
     • Total a pagar: $${sessionAttributes.totalCosto}
     `;
 
-    // Limpiar todas las variables de sesión
-    console.log("\n=== FINALIZANDO ORDEN ===");
+    console.log("---Resumen Creado---");
 
-    console.log("\n==== PREPARANDO REGISTRO DE ORDEN EN GOOGLE SHEETS ====");
-
-    try {
-
-        // Preparar los datos para el registro
-        const fechaHora = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}:${String(new Date().getSeconds()).padStart(2, '0')}`;
-
-        console.log("Preparando datos para registro en Google Sheets:");
-
-        // Preparar el objeto de nueva orden
-        const nuevaOrden = {
-            "No. Orden": sessionAttributes.numeroOrden || 'N/A',
-            "Fecha y Hora": fechaHora,
-            "Cliente": sessionAttributes.nombreCliente || 'N/A',
-            "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
-            "Elementos Ordenados": sessionAttributes.orden || 'N/A',
-            "Direccion": sessionAttributes.direccionEntrega || 'N/A',
-            "Metodo de Pago": slots.metodoPago?.value?.interpretedValue || 'N/A',
-            "Total": sessionAttributes.totalCosto || 'N/A',
-            "Estado": "Pendiente",
-            "Observaciones": sessionAttributes.comentariosOrden || 'Sin comentarios'
+    // Verificar si ya tenemos una confirmación del usuario
+    if (!sessionAttributes.resumenMostrado) {
+        console.log("---Se mostrara el resumen y se volvera a pedir confirmacion---");
+        // Primera vez - mostrar resumen y pedir confirmación
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "ElicitSlot",
+                    slotToElicit: "confirmacion"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    slots: slots,
+                    state: "InProgress"
+                },
+                sessionAttributes: {
+                    ...sessionAttributes,
+                    resumenMostrado: true
+                }
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: mensajeResumen
+                },
+                {
+                    contentType: "PlainText",
+                    content: "¿Confirmas que tu orden está correcta?"
+                }
+            ]
         };
-
-        console.log("Datos de nueva orden a registrar:", JSON.stringify(nuevaOrden, null, 2));
-
-        // Realizar el registro en Google Sheets
-        try {
-
-            console.log("Iniciando registro de orden en Google Sheets");
-            const response = await registrarOrden(
-                nuevaOrden["No. Orden"],
-                nuevaOrden["Fecha y Hora"],
-                nuevaOrden["Cliente"],
-                nuevaOrden["Numero de Telefono"],
-                nuevaOrden["Elementos Ordenados"],
-                nuevaOrden["Direccion"],
-                nuevaOrden["Metodo de Pago"],
-                nuevaOrden["Total"],
-                nuevaOrden["Estado"],
-                nuevaOrden["Observaciones"]
-            );
-
-            console.log("Resultado del registro en Google Sheets:", JSON.stringify(response, null, 2));
-
-
-        } catch (registroError) {
-
-            console.error("Error al intentar registrar la orden en Google Sheets:", registroError);
-
-        }
-
-    } catch (error) {
-        console.error("Error general al preparar el registro de orden:", error);
     }
 
-    console.log("\n==== PREPARANDO REGISTRO DE CLIENTE EN GOOGLE SHEETS ====");
+    // Procesar la respuesta del usuario
+    const confirmacionResult = await verificarConfirmacion(inputUsuario);
 
-    const clienteExistente = await buscarClienteExistente(sessionAttributes.nombreCliente, sessionAttributes.telefonoCliente);
+    console.log("Reulstado de confirmacion del cliente:", confirmacionResult);
 
-    if (!clienteExistente.encontrado) {
-        console.log("El cliente no esta registrado, por lo cual, se procede a realizar el registro:")
+    if (confirmacionResult.isConfirmacion) {
+        console.log(" [*] El cliente ha confirmado su orden. Se procederá a finalizar la misma [*]");
+
+        console.log("\n=== FINALIZANDO ORDEN ===");
+
+        console.log("\n==== PREPARANDO REGISTRO DE ORDEN EN GOOGLE SHEETS ====");
 
         try {
 
-            console.log("Preparando datos para registrar Cliente en Google Sheets:");
+            // Preparar los datos para el registro
+            const fechaHora = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}:${String(new Date().getSeconds()).padStart(2, '0')}`;
 
-
-
-            // Generar un número aleatorio entre 1000 y 2000
-            let codigo = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+            console.log("Preparando datos para registro en Google Sheets:");
 
             // Preparar el objeto de nueva orden
-            const nuevoCliente = {
-                "Codigo": codigo || 'N/A',
-                "Nombre": sessionAttributes.nombreCliente || 'N/A',
+            const nuevaOrden = {
+                "No. Orden": sessionAttributes.numeroOrden || 'N/A',
+                "Fecha y Hora": fechaHora,
+                "Cliente": sessionAttributes.nombreCliente || 'N/A',
                 "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
+                "Elementos Ordenados": sessionAttributes.orden || 'N/A',
                 "Direccion": sessionAttributes.direccionEntrega || 'N/A',
+                "Metodo de Pago": sessionAttributes.metodoPago || 'N/A',
+                "Total": sessionAttributes.totalCosto || 'N/A',
+                "Estado": "Pendiente",
+                "Observaciones": sessionAttributes.comentariosOrden || 'Sin comentarios'
             };
 
-            console.log("Datos de nuevo cliente a registrar:", JSON.stringify(nuevoCliente, null, 2));
+            console.log("Datos de nueva orden a registrar:", JSON.stringify(nuevaOrden, null, 2));
 
             // Realizar el registro en Google Sheets
             try {
 
-                console.log("Iniciando registro de cliente en Google Sheets");
-                const response = await registrarCliente(
-                    nuevoCliente["Codigo"],
-                    nuevoCliente["Nombre"],
-                    nuevoCliente["Numero de Telefono"],
-                    nuevoCliente["Direccion"]
+                console.log("Iniciando registro de orden en Google Sheets");
+                const response = await registrarOrden(
+                    nuevaOrden["No. Orden"],
+                    nuevaOrden["Fecha y Hora"],
+                    nuevaOrden["Cliente"],
+                    nuevaOrden["Numero de Telefono"],
+                    nuevaOrden["Elementos Ordenados"],
+                    nuevaOrden["Direccion"],
+                    nuevaOrden["Metodo de Pago"],
+                    nuevaOrden["Total"],
+                    nuevaOrden["Estado"],
+                    nuevaOrden["Observaciones"]
                 );
 
-                console.log("Resultado del registro de cliente en Google Sheets:", JSON.stringify(response, null, 2));
+                console.log("Resultado del registro en Google Sheets:", JSON.stringify(response, null, 2));
 
 
             } catch (registroError) {
 
-                console.error("Error al intentar registrar al cliente en Google Sheets:", registroError);
+                console.error("Error al intentar registrar la orden en Google Sheets:", registroError);
 
             }
 
         } catch (error) {
-            console.error("Error general al preparar el registro de cliente:", error);
+            console.error("Error general al preparar el registro de orden:", error);
         }
 
+        console.log("\n==== PREPARANDO REGISTRO DE CLIENTE EN GOOGLE SHEETS ====");
+
+        const clienteExistente = await buscarClienteExistente(sessionAttributes.nombreCliente, sessionAttributes.telefonoCliente);
+
+        if (!clienteExistente.encontrado) {
+            console.log("El cliente no esta registrado, por lo cual, se procede a realizar el registro:")
+
+            try {
+
+                console.log("Preparando datos para registrar Cliente en Google Sheets:");
+
+
+
+                // Generar un número aleatorio entre 1000 y 2000
+                let codigo = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
+
+                // Preparar el objeto de nueva orden
+                const nuevoCliente = {
+                    "Codigo": codigo || 'N/A',
+                    "Nombre": sessionAttributes.nombreCliente || 'N/A',
+                    "Numero de Telefono": sessionAttributes.telefonoCliente || 'N/A',
+                    "Direccion": sessionAttributes.direccionEntrega || 'N/A',
+                };
+
+                console.log("Datos de nuevo cliente a registrar:", JSON.stringify(nuevoCliente, null, 2));
+
+                // Realizar el registro en Google Sheets
+                try {
+
+                    console.log("Iniciando registro de cliente en Google Sheets");
+                    const response = await registrarCliente(
+                        nuevoCliente["Codigo"],
+                        nuevoCliente["Nombre"],
+                        nuevoCliente["Numero de Telefono"],
+                        nuevoCliente["Direccion"]
+                    );
+
+                    console.log("Resultado del registro de cliente en Google Sheets:", JSON.stringify(response, null, 2));
+
+
+                } catch (registroError) {
+
+                    console.error("Error al intentar registrar al cliente en Google Sheets:", registroError);
+
+                }
+
+            } catch (error) {
+                console.error("Error general al preparar el registro de cliente:", error);
+            }
+
+        }
+
+        console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
+
+        // Limpiar todas las variables de sesión
+        sessionAttributes = {};
+        console.log("Variables de sesión limpiadas");
+
+        // Retornar respuesta final
+        const finalResponse = {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: {
+                    ...sessionAttributes,
+                    requiresHumanIntervention: true,
+                    reason: "Orden Completada. Verificar conversacion y validar directamente con el cliente",
+                }
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Tu pedido estará listo entre 25 a 30 minutos."
+                },
+                {
+                    contentType: "PlainText",
+                    content: "¡Muchas gracias por tu preferencia!"
+                },
+                {
+                    contentType: "PlainText",
+                    content: "En un momento un agente se pondrá en contacto contigo para confirmar los detalles."
+                }
+            ]
+        };
+
+        console.log("Respuesta final:", JSON.stringify(finalResponse, null, 2));
+        console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
+
+        return finalResponse;
+
+    } else {
+        // Si no confirma, preguntar si desea modificar algo
+
+        console.log(" [*] El cliente NO confirmo su orden [*]");
+
+        delete sessionAttributes.resumenMostrado;
+
+        console.log("Se eliminó la variable de seison para");
+
+        console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes,
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Entiendo que hay algo que no está correcto. ¿Deseas modificar tu orden o tienes alguna consulta adicional?"
+                }
+            ]
+        };
     }
-
-    console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
-
-    sessionAttributes = {};
-    console.log("Variables de sesión limpiadas");
-
-    // Retornar respuesta final
-    const finalResponse = {
-        sessionState: {
-            dialogAction: {
-                type: "Close"
-            },
-            intent: {
-                name: event.sessionState.intent.name,
-                state: "Fulfilled"
-            },
-            sessionAttributes: {
-                ...sessionAttributes,
-                requiresHumanIntervention: true,
-                reason: "Orden Completada. Verificar conversacion y validar directamente con el cliente",
-            }
-        },
-        messages: [
-            {
-                contentType: "PlainText",
-                content: mensajeResumen
-            },
-            {
-                contentType: "PlainText",
-                content: "Tu pedido estará listo entre 25 a 30 minutos."
-            },
-            {
-                contentType: "PlainText",
-                content: "¡Muchas gracias por tu preferencia!"
-            },
-            {
-                contentType: "PlainText",
-                content: "En un momento un agente se pondrá en contacto contigo para confirmar los detalles."
-            }
-        ]
-    };
-
-    console.log("Respuesta final:", JSON.stringify(finalResponse, null, 2));
-    console.log("=== FIN DE FINALIZAR ORDEN INTENT ===\n");
-
-    return finalResponse;
 
 }
 
@@ -1480,10 +1550,7 @@ async function handleCancelarOrdenIntent(event, sessionAttributes, intentInfo) {
     // Verificar si está esperando confirmacion para cancelar la orden
     if (!sessionAttributes.esperandoConfirmacionCancelar) {
 
-        let resumenActual = `Tu pedido en estos momentos es: ${sessionAttributes.orden} \n`;
-
-        resumenActual += `\nTotal a pagar: $${sessionAttributes.totalCosto}`;
-
+        let resumenActual = `Tu pedido en estos momentos es: \n\n${sessionAttributes.orden} \n`;
 
         if (sessionAttributes.comentariosOrden) {
             resumenActual += `\n\nComentarios:\n${sessionAttributes.comentariosOrden}`;
@@ -2127,25 +2194,25 @@ async function handleMetodosDeEnvioIntent(event, sessionAttributes) {
             console.log("No se encontró departamento, pero se capturo nombre de un departamento, asi que hay que tratarlo como invalido.");
 
             return {
-                    sessionState: {
-                        dialogAction: {
-                            type: "Close"
-                        },
-                        intent: {
-                            name: event.sessionState.intent.name,
-                            state: "Fulfilled"
-                        }
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
                     },
-                    messages: [
-                        {
-                            contentType: "PlainText",
-                            content: `Lo siento, actualmente no realizamos envíos a ${analisisDepartamento.departamento}. Si tienes otra ubicación en mente, puedes consultarme nuevamente.`
-                        }
-                    ]
-                };
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Fulfilled"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: `Lo siento, actualmente no realizamos envíos a ${analisisDepartamento.departamento}. Si tienes otra ubicación en mente, puedes consultarme nuevamente.`
+                    }
+                ]
+            };
 
         }
-        
+
         // Obtener los mensajes de métodos de envío
         const mensajeMetodosDeEnvio = await generarMensajeMetodosDeEnvio(userInput);
         console.log("Mensajes de métodos de envío generados:", mensajeMetodosDeEnvio);
@@ -3478,7 +3545,7 @@ async function analizarDepartamentoEnInput(userInput, costosDeEnvio) {
         // Obtener los prompts desde Google Sheets
         const prompts = await getPrompts('analizarDepartamentoEnInput');
 
-        const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(costosDeEnvio, null, 2)}',JSON.stringify(costosDeEnvio, null, 2));
+        const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(costosDeEnvio, null, 2)}', JSON.stringify(costosDeEnvio, null, 2));
 
         // Reemplazar variables en el user prompt si es necesario
         const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
