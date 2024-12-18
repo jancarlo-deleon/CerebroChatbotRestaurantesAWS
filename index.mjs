@@ -464,6 +464,181 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             sessionAttributes.confirmacionProcesada = true;
         }
 
+        console.log("[//] Aqui empieza el proceso para obtener costo de envio [//]");
+
+        if (isSlotComplete('direccionEntrega') && !sessionAttributes.departamentoValidado) {
+            console.log("[//] Proceso para obtener departamento y costo de envio[//]");
+
+            const direccionInicial = slots.direccionEntrega.value.interpretedValue;
+            console.log("[//] Valor de direccionInicial: [//]", direccionInicial);
+
+            try {
+                console.log("[//] Comenzando proceso try-catch [//]");
+                // Obtener costos de envío
+                const costosDeEnvio = await getCostosDeEnvio();
+
+                // Analizar si hay departamento en la dirección
+                const analisisDepartamento = await analizarDepartamentoEnInput(direccionInicial, costosDeEnvio);
+
+                let costoEnvio
+
+                console.log("[//]Valor de encontrado de analisisDepartamento: [//]", analisisDepartamento.encontrado);
+                console.log("[//]Valor de slots.departamentoEnvio antes de validar si es necesario capturar slot o no: [//]", slots.departamentoEnvio);
+
+                if (!analisisDepartamento.encontrado && !slots.departamentoEnvio) {
+
+                    // Si no se encontró departamento, solicitar al usuario
+                    console.log("[//] No se encontro departamento, en esta parte se solicita la info para llenar el slot [//]");
+
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "ElicitSlot",
+                                slotToElicit: "departamentoEnvio"
+                            },
+                            intent: {
+                                name: "OrdenarIntent",
+                                slots: {
+                                    ...slots,
+                                    departamentoEnvio: null
+                                },
+                                state: "InProgress"
+                            },
+                            sessionAttributes: {
+                                ...sessionAttributes,
+                                direccionTemporal: direccionInicial,
+                                departamentoCapturado: true
+                            }
+                        },
+                        messages: [{
+                            contentType: "PlainText",
+                            content: "Para poder calcular el costo de envío, ¿podrías indicarme en qué departamento te encuentras?"
+                        }]
+                    };
+
+                } else {
+                    console.log("[//] Se encontro departamento para hacer busqueda de costo de envio[//]");
+
+
+                    if (slots.departamentoEnvio) {
+
+                        costoEnvio = costosDeEnvio.find(c =>
+                            c.Departamento.toLowerCase() === slots.departamentoEnvio.value.interpretedValue.toLowerCase()
+                        );
+
+                        console.log("[// Contenido de costoEnvio con slot capturado", costoEnvio);
+
+                        if (!costoEnvio) {
+
+                            console.log("[//] No hay departamento para calcular costo de envio [//]");
+
+                            return {
+                                sessionState: {
+                                    dialogAction: {
+                                        type: "Close"
+                                    },
+                                    intent: {
+                                        name: "OrdenarIntent",
+                                        state: "Failed"
+                                    }
+                                },
+                                messages: [{
+                                    contentType: "PlainText",
+                                    content: `Lo siento, actualmente no realizamos envíos a ${direccionInicial}, ${slots.departamentoEnvio.value.interpretedValue}.`
+                                },
+                                {
+                                    contentType: "PlainText",
+                                    content: `Si gustas consultar disponibilidad de envio para otro departamento, con gusto te puedo dar información.`
+                                }
+                                ]
+                            };
+                        }
+
+
+
+                    } else {
+
+                        costoEnvio = costosDeEnvio.find(c =>
+                            c.Departamento.toLowerCase() === analisisDepartamento.departamento.toLowerCase()
+                        );
+
+                        console.log("[// Contenido de costoEnvio con departamento detectado en el input", costoEnvio);
+
+                        if (!costoEnvio) {
+
+                            console.log("[//] No hay departamento para calcular costo de envio [//]");
+
+                            return {
+                                sessionState: {
+                                    dialogAction: {
+                                        type: "Close"
+                                    },
+                                    intent: {
+                                        name: "OrdenarIntent",
+                                        state: "Failed"
+                                    }
+                                },
+                                messages: [{
+                                    contentType: "PlainText",
+                                    content: `Lo siento, actualmente no realizamos envíos a ${direccionInicial} .`
+                                },
+                                {
+                                    contentType: "PlainText",
+                                    content: `Si gustas consultar disponibilidad de envio para otro departamento, con gusto te puedo dar información.`
+                                }
+                                ]
+                            };
+                        }
+
+                    }
+
+                }
+
+                console.log("[//] Se actualizarán las variables de sesion [//]");
+
+                sessionAttributes.costoEnvio = costoEnvio.Costo;
+
+                // Guardar información en variables de sesión
+                if (slots.departamentoEnvio) {
+                    sessionAttributes.departamentoParaEnvio = slots.departamentoEnvio.value.interpretedValue;
+                    console.log("[//] Valor de sessionAttributes.departamentoParaEnvio despues del proceso de captura por slot: [//]", sessionAttributes.departamentoParaEnvio);
+
+
+                    let variableParaConcatenaDireccion = sessionAttributes.direccionTemporal + ", " + sessionAttributes.departamentoParaEnvio;
+                    console.log("Conteido variableParaConcatenacionDireccion:", variableParaConcatenaDireccion);
+
+                    // La dirección ya incluye el departamento, no necesita concatenación
+                    sessionAttributes.direccionEntregaTemp = variableParaConcatenaDireccion;
+                    console.log("[//] Valor de sessionAttributes.direccionEntregaTemp despues del proceso de captura por slot: [//]", sessionAttributes.direccionEntregaTemp);
+
+                }
+
+                sessionAttributes.departamentoValidado = true;
+
+                delete sessionAttributes.departamentoCapturado;
+
+                console.log("[///] Se han actualizado los atributos de sesión actuales para ordenar:", JSON.stringify(sessionAttributes, null, 2));
+
+            } catch (error) {
+                console.error("[//] Error al procesar la dirección:", error);
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: "OrdenarIntent",
+                            state: "Failed"
+                        }
+                    },
+                    messages: [{
+                        contentType: "PlainText",
+                        content: "Lo siento, hubo un error al procesar la dirección. Por favor, intenta nuevamente."
+                    }]
+                };
+            }
+
+        }
 
         // Verificar datos del cliente primero
         const requiredSlots = ['nombreCliente', 'telefonoCliente', 'direccionEntrega'];
@@ -504,8 +679,14 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
         // Guardar la información del cliente en las variables de sesión
         sessionAttributes.nombreCliente = slots.nombreCliente.value.interpretedValue;
+
+        if (sessionAttributes.direccionEntregaTemp) {
+            sessionAttributes.direccionEntrega = sessionAttributes.direccionEntregaTemp;
+        } else {
+            sessionAttributes.direccionEntrega = slots.direccionEntrega.value.interpretedValue;
+        }
         sessionAttributes.telefonoCliente = slots.telefonoCliente.value.interpretedValue;
-        sessionAttributes.direccionEntrega = slots.direccionEntrega.value.interpretedValue;
+
 
         let userInputAux = sessionAttributes.initialInput;
         console.log("*** Recuperando input inicial AUX para procesar:", userInputAux);
@@ -1235,18 +1416,29 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
 
     sessionAttributes.numeroOrden = numeroOrden;
 
+    const totalParcial = parseFloat(sessionAttributes.totalCosto.replace('$', '') || 0);
+    console.log("Valor de Variable totalParcial:", totalParcial);
+    const costoEnvio = parseFloat(sessionAttributes.costoEnvio.replace('$', '') || 0);
+    console.log("Valor de Variable costoEnvio:", costoEnvio);
+    const totalAPagar = (totalParcial + costoEnvio).toFixed(2);
+    console.log("[]] Valor de la suma de total Parcial y costo de envio:", totalAPagar);
+
+    sessionAttributes.totalFINAL = totalAPagar;
+
     console.log("---Comenzando a crear el resumen---");
     // Crear mensaje de resumen
     const mensajeResumen = `
-    Tu orden es la #${sessionAttributes.numeroOrden } \n
+    Tu orden es la #${sessionAttributes.numeroOrden} \n
     
     • Nombre de quien recibe: ${sessionAttributes.nombreCliente} \n
     • Número de Teléfono: ${sessionAttributes.telefonoCliente} \n
     • Entrega: ${sessionAttributes.direccionEntrega} \n
     • Orden: ${sessionAttributes.orden} \n
     • Comentarios: ${sessionAttributes.comentariosOrden || 'Sin comentarios'} \n
-    • Método de pago: ${sessionAttributes.metodoPago} \n
-    • Total a pagar: $${sessionAttributes.totalCosto}
+    • Método de pago: ${sessionAttributes.metodoPago} \n\n
+    • Total parcial: $${sessionAttributes.totalCosto}\n
+    • Costo de Envío: ${sessionAttributes.costoEnvio}\n\n
+    • Total a Pagar: $${sessionAttributes.totalFINAL}\n\n
     `;
 
     console.log("---Resumen Creado---");
@@ -1312,7 +1504,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
                 "Elementos Ordenados": sessionAttributes.orden || 'N/A',
                 "Direccion": sessionAttributes.direccionEntrega || 'N/A',
                 "Metodo de Pago": sessionAttributes.metodoPago || 'N/A',
-                "Total": sessionAttributes.totalCosto || 'N/A',
+                "Total": sessionAttributes.totalFINAL || 'N/A',
                 "Estado": "Pendiente",
                 "Observaciones": sessionAttributes.comentariosOrden || 'Sin comentarios'
             };
@@ -2224,7 +2416,7 @@ async function handleMetodosDeEnvioIntent(event, sessionAttributes) {
             // Si se encontró el departamento en el input inicial
             const departamento = analisisDepartamento.departamento;
             console.log("Valor del departamento para buscar precio de envio:", departamento);
-            const costoEnvio = costosDeEnvio.find(c => c.Departamento === departamento);
+            const costoEnvio = costosDeEnvio.find(c => c.Departamento.toLowerCase() === departamento.toLowerCase());
             console.log("El costo de envio es:", costoEnvio);
 
             // Verificar si el departamento está en nuestra lista de envíos
@@ -2307,7 +2499,7 @@ async function handleMetodosDeEnvioIntent(event, sessionAttributes) {
                 // Si ya tenemos el slot, verificar si el departamento está disponible
                 const departamento = departamentoSlot.value.interpretedValue;
                 console.log("Valor del departamento para buscar precio de envio:", departamento);
-                const costoEnvio = costosDeEnvio.find(c => c.Departamento === departamento);
+                const costoEnvio = costosDeEnvio.find(c => c.Departamento.toLowerCase() === departamento.toLowerCase());
                 console.log("El costo de envio es:", costoEnvio);
 
                 if (!costoEnvio) {
@@ -2732,6 +2924,7 @@ async function getCostosDeEnvio() {
         const response = await axios.get(`${SHEET_BEST_API_URL}/tabs/COSTO%20DE%20ENVIOS`);
 
         const costoDeEnvio = response.data;
+        console.log("Respuesta con valor de costoDeEnvio:", costoDeEnvio);
 
         return costoDeEnvio;
 
@@ -3574,7 +3767,15 @@ async function analizarDepartamentoEnInput(userInput, costosDeEnvio) {
         console.log(response.data.choices[0].message.content);
         console.log("-------------------------------------------------------------------------------------------");
 
-        return JSON.parse(response.data.choices[0].message.content);
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        console.log("Valor de la respuesta limpia:", contenido)
+
+        return JSON.parse(contenido);
 
     } catch (error) {
         console.error("Error al analizar departamento:", error);
