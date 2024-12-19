@@ -811,7 +811,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         console.log('[--] Atributos de sesión actuales Antes de verificar si es orden direceta:', JSON.stringify(sessionAttributes, null, 2));
 
         // Verificar si hay un elemento previo guardado en la sesión
-        const elementoPrevio = sessionAttributes.categoriaPrevia ? sessionAttributes.categoriaPrevia + " " + sessionAttributes.orden : sessionAttributes.orden;
+        const elementoPrevio = sessionAttributes.categoriaPrevia ? sessionAttributes.categoriaPrevia + " " + sessionAttributes.orden : sessionAttributes.ordenParaProcesar;
         console.log("Valor de elemento previo:", elementoPrevio);
 
         if (elementoPrevio) {
@@ -955,10 +955,15 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Construir los mensajes separados
         let mensajes = [];
 
+        mensajes.push({
+            contentType: "PlainText",
+            content: `Gracias por brindarme tus datos.`
+        });
+
         // Agregar el resumen 
         mensajes.push({
             contentType: "PlainText",
-            content: `Confirmando tu orden, estaría conformada de la siguiente manera:\n\n ${orderInfo.orden}`
+            content: `Retomando desde antes que te pidiera los datos de envío, tu orden estaría conformada de la siguiente manera:\n\n ${orderInfo.orden}`
         });
 
         // Agregar los comentarios, si existen
@@ -1094,89 +1099,100 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
     console.log("Valor del Input capturado a partir del Slot: ", inputSlot);
     let inputDirecto = event.inputTranscript.toLowerCase();
     console.log("Valor del Input capturado directamente: ", inputDirecto);
+    let elementoPrevio = sessionAttributes.ordenParaProcesar;
+    console.log("Valor de elemento previo desde AgreagarAOrdenIntent:", elementoPrevio);
 
     let nuevoInput;
 
-    // Verificar si es una orden directa 
-    const isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
-    console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder);
-
-    if (!isDirectOrder && inputSlot == null) {
-
-        console.log("NO es considerado una orden directa")
-
-        nuevoInput = inputSlot;
-        console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
-
-        let resumenActual = `Tu orden actual incluye: ${sessionAttributes.orden} \n`;
-
-        resumenActual += `\nTotal a pagar: $${sessionAttributes.totalCosto}`;
-
-
-        if (sessionAttributes.comentariosOrden) {
-            resumenActual += `\n\nComentarios:\n${sessionAttributes.comentariosOrden}`;
-        }
-
-        // Preparar los mensajes base
-        const mensajes = [
-            {
-                contentType: "PlainText",
-                content: resumenActual
-            }
-        ];
-
-        // Obtener datos de imágenes
-        const imagenesData = await getImagenes();
-
-        // Buscar la imagen específica para el menú
-        const imagenMenu = imagenesData.find(imagen => imagen.Nombre === "Menu");
-        console.log("Contenido de imagenMenu:", imagenMenu);
-
-        // Agregar mensaje inicial
-        mensajes.push({
-            contentType: "PlainText",
-            content: "A continuación, te presento el menú:"
-        });
-
-
-        //Agregar imagen del menú
-        if (imagenMenu) {
-            console.log("La imagen del menu existe, se estará agregando la misma al mensaje.");
-            mensajes.push({
-                contentType: "ImageResponseCard",
-                imageResponseCard: {
-                    title: "Nuestro Menú",
-                    imageUrl: imagenMenu.Link,
-
-                }
-            });
-            console.log("Imagen agregada correctamente a la respuesta");
-        }
-
-        // Agregar mensaje final
-        mensajes.push({
-            contentType: "PlainText",
-            content: "¿Qué te gustaria agregar a tu orden?"
-        });
-
-
-        return {
-            sessionState: {
-                dialogAction: {
-                    type: "ElicitSlot",
-                    slotToElicit: "nuevaOrden"
-                },
-                intent: {
-                    name: event.sessionState.intent.name,
-                    state: "InProgress"
-                },
-                sessionAttributes: sessionAttributes
-            },
-            messages: mensajes
-        };
-
+    // Primero validar si existe ordenParaProcesar
+    if (sessionAttributes.ordenParaProcesar) {
+        nuevoInput = elementoPrevio + " " + inputDirecto;
+        console.log("Valor de nuevoInput obtenido de elementoPrevio: ", nuevoInput);
+        // Limpiar el valor para que no se use en futuras iteraciones
+        delete sessionAttributes.ordenParaProcesar;
     } else {
-        nuevoInput = inputDirecto;
+
+        // Verificar si es una orden directa 
+        const isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
+        console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder);
+
+        if (!isDirectOrder && inputSlot == null) {
+
+            console.log("NO es considerado una orden directa")
+
+            nuevoInput = inputSlot;
+            console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
+
+            let resumenActual = `Tu orden actual incluye: ${sessionAttributes.orden} \n`;
+
+            resumenActual += `\nTotal a pagar: $${sessionAttributes.totalCosto}`;
+
+
+            if (sessionAttributes.comentariosOrden) {
+                resumenActual += `\n\nComentarios:\n${sessionAttributes.comentariosOrden}`;
+            }
+
+            // Preparar los mensajes base
+            const mensajes = [
+                {
+                    contentType: "PlainText",
+                    content: resumenActual
+                }
+            ];
+
+            // Obtener datos de imágenes
+            const imagenesData = await getImagenes();
+
+            // Buscar la imagen específica para el menú
+            const imagenMenu = imagenesData.find(imagen => imagen.Nombre === "Menu");
+            console.log("Contenido de imagenMenu:", imagenMenu);
+
+            // Agregar mensaje inicial
+            mensajes.push({
+                contentType: "PlainText",
+                content: "A continuación, te presento el menú:"
+            });
+
+
+            //Agregar imagen del menú
+            if (imagenMenu) {
+                console.log("La imagen del menu existe, se estará agregando la misma al mensaje.");
+                mensajes.push({
+                    contentType: "ImageResponseCard",
+                    imageResponseCard: {
+                        title: "Nuestro Menú",
+                        imageUrl: imagenMenu.Link,
+
+                    }
+                });
+                console.log("Imagen agregada correctamente a la respuesta");
+            }
+
+            // Agregar mensaje final
+            mensajes.push({
+                contentType: "PlainText",
+                content: "¿Qué te gustaria agregar a tu orden?"
+            });
+
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "ElicitSlot",
+                        slotToElicit: "nuevaOrden"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "InProgress"
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: mensajes
+            };
+
+        } else {
+            nuevoInput = inputDirecto;
+        }
     }
 
     try {
@@ -1986,8 +2002,7 @@ async function handleConsultaPreciosMenuIntent(event, sessionAttributes, intentI
         }
 
         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
-
-        sessionAttributes.orden = respuesta.nombreElemento;
+        sessionAttributes.ordenParaProcesar = respuesta.nombreElemento;
         sessionAttributes.imagenParaOrden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
@@ -2091,8 +2106,7 @@ async function handleConsultaElementosMenuIntent(event, sessionAttributes, inten
         }
 
         // Si el elemento existe o no se ha alcanzado el máximo de fallbacks
-
-        sessionAttributes.orden = respuesta.nombreElemento;
+        sessionAttributes.ordenParaProcesar = respuesta.nombreElemento;
         sessionAttributes.imagenParaOrden = respuesta.nombreElemento;
 
         console.log("Se ha actualiazdo las variables de sesion actuales:", JSON.stringify(sessionAttributes, null, 2));
