@@ -932,8 +932,46 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             };
         }
 
+        // Después de verificar datos del cliente y antes de procesar la orden
+        if (!sessionAttributes.tamanioDeLoOrdenado) {
+            // Verificar si el slot 'tamanioOrden' tiene valor
+            const slotTamanioOrden = event.sessionState.intent.slots?.tamanioOrden?.value?.interpretedValue;
 
-        console.log("Se procederá a utilizar ChatGPT para empezar con el proceso de toma de orden")
+            if (!slotTamanioOrden) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "tamanioOrden"
+                        },
+                        intent: {
+                            name: "OrdenarIntent",
+                            state: "InProgress",
+                            slots: event.sessionState.intent.slots
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "¿De qué tamaño deseas tu orden?"
+                        }
+                    ]
+                };
+            }
+
+            // Guardar el tamaño en las variables de sesión
+            sessionAttributes.tamanioDeLoOrdenado = slotTamanioOrden;
+        }
+
+
+        // Concatenar el tamaño a userInput antes de procesar con ChatGPT
+        userInput = `${userInput} ${sessionAttributes.tamanioDeLoOrdenado}`;
+        console.log("Input final con tamaño especificado:", userInput);
+
+        // Continuar con el procesamiento de la orden
+        console.log("Se procederá a utilizar ChatGPT para empezar con el proceso de toma de orden");
+        console.log("Este es el userInput que se estara procesando con llamadaAChatGPTParaOrdenar: ", userInput);
         let ordenarGPT = await llamadaAChatGPTParaOrdenar(userInput, menuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
@@ -949,6 +987,10 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         sessionAttributes.totalUnidades = orderInfo.totalUnidades;
         sessionAttributes.comentariosOrden = orderInfo.comentarios;
         sessionAttributes.totalCosto = orderInfo.totalCosto;
+
+        delete sessionAttributes.initialInput;
+        delete sessionAttributes.tamanioDeLoOrdenado;
+        delete sessionAttributes.ordenParaProcesar;
 
         console.log("Se han actualizado los atributos de sesión actuales para ordenar:", JSON.stringify(sessionAttributes, null, 2));
 
@@ -1195,6 +1237,84 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         }
     }
 
+    // Procesamiento de categorias
+    if (sessionAttributes.esperandoSeleccionCategoria) {
+        if (sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica) {
+            console.log("Procesando selección de categoría previa en AgregarAOrden:", sessionAttributes.categoriaPrevia);
+            nuevoInput = `${sessionAttributes.initialInput} ${nuevoInput}`;
+            console.log("[++] Valor de NuevoInput en procesamiento de categorias la AGREGAR en el IF de procesandoCategoriaGeneralOSolicitudEspecifica:", nuevoInput);
+
+            delete sessionAttributes.esperandoSeleccionCategoria;
+            delete sessionAttributes.categoriaPrevia;
+            delete sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica;
+
+            console.log("Input concatenado para procesar en AgregarAOrden:", nuevoInput);
+        } else {
+            nuevoInput = sessionAttributes.initialInput;
+            console.log("Recuperando input inicial para procesar en AgregarAOrden:", nuevoInput);
+            console.log("[++] Valor de NuevoInput en procesamiento de categorias la AGREGAR en el ELSE de procesandoCategoriaGeneralOSolicitudEspecifica:", nuevoInput);
+
+            delete sessionAttributes.esperandoSeleccionCategoria;
+            delete sessionAttributes.categoriaPrevia;
+            delete sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica;
+        }
+    }
+
+    else {
+        const categoriaCheck = await verificarSiEsCategoria(nuevoInput);
+
+        if (categoriaCheck.esCategoria) {
+            console.log("Se detectó solicitud de categoría:", categoriaCheck.categoria);
+            const opcionesMenu = await obtenerOpcionesPorCategoria(categoriaCheck.categoria, menuData);
+
+            if (!opcionesMenu) {
+                return {
+                    sessionState: {
+                        dialogAction: { type: "Close" },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: `No encontré opciones de ${categoriaCheck.categoria} en nuestro menú.`
+                        }
+                    ]
+                };
+            }
+
+            sessionAttributes.categoriaPrevia = categoriaCheck.categoria;
+            sessionAttributes.esperandoSeleccionCategoria = true;
+            sessionAttributes.procesandoCategoriaGeneralOSolicitudEspecifica = true;
+            sessionAttributes.initialInput = nuevoInput;
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "ElicitSlot",
+                        slotToElicit: "nuevaOrden"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        slots: event.sessionState.intent.slots,
+                        state: "InProgress"
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: `Estas son nuestras opciones:\n${opcionesMenu}\n\n¿Cuál te gustaría agregar?`
+                    }
+                ]
+            };
+        }
+    }
+
+
+
     try {
 
         // Preparar el mensaje para ChatGPT incluyendo la orden actual
@@ -1220,6 +1340,8 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         sessionAttributes.totalUnidades = orderInfo.totalUnidades;
         sessionAttributes.totalCosto = orderInfo.totalCosto;
         sessionAttributes.comentariosOrden = orderInfo.comentarios;
+
+        delete sessionAttributes.initialInput;
 
         console.log("Se han actualizado los atributos de sesión actuales para ordenar gracias a que se añadieron elementos:", JSON.stringify(sessionAttributes, null, 2));
 
