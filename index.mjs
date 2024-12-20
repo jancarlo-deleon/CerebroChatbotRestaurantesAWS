@@ -933,19 +933,64 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         }
 
         // Después de verificar datos del cliente y antes de procesar la orden
-        if (!sessionAttributes.tamanioDeLoOrdenado) {
-            // Verificar si el slot 'tamanioOrden' tiene valor
-            const slotTamanioOrden = event.sessionState.intent.slots?.tamanioOrden?.value?.interpretedValue;
 
-            if (!slotTamanioOrden) {
+        // Obtener información de categorías si aún no la tenemos
+        if (!sessionAttributes.categoriaIdentificada) {
+            console.log('=== Inicio del proceso de captura de atributos ===');
+            console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
+
+            const categoriaMenuData = await getCategoriaMenu();
+            console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
+
+            console.log('/-/ Procesando categoría y atributos para input:', userInput);
+            const categoriaInfo = await analizarCategoriaYAtributos(userInput, menuData, categoriaMenuData);
+            console.log('/-/ Información de categoría procesada:', categoriaInfo);
+
+            // Guardar información básica
+            sessionAttributes.categoriaIdentificada = categoriaInfo.categoria;
+            sessionAttributes.numeroTotalAtributos = categoriaInfo.numeroAtributos;
+            sessionAttributes.atributosCapturados = 0;
+            sessionAttributes.userInputOriginal = userInput; // Guardar input original
+
+            // Guardar información del primer atributo
+            if (categoriaInfo.atributos && categoriaInfo.atributos.length > 0) {
+                const primerAtributo = categoriaInfo.atributos[0];
+                sessionAttributes.atributoActualNombre = primerAtributo.nombre;
+                sessionAttributes.atributoActualValores = primerAtributo.valoresAceptables;
+                sessionAttributes.atributoActualMensaje = primerAtributo.mensajeSolicitud;
+                // Guardar todos los atributos como string JSON para recuperarlos después
+                sessionAttributes.atributosRestantes = JSON.stringify(categoriaInfo.atributos.slice(1));
+            }
+
+            console.log('/-/ Categoría identificada:', sessionAttributes.categoriaIdentificada);
+            console.log('/-/ Número total de atributos:', sessionAttributes.numeroTotalAtributos);
+            console.log('/-/ Atributos Actual Nombre:', sessionAttributes.atributoActualNombre);
+            console.log('/-/ Atributos Actual Valores:', sessionAttributes.atributoActualValores);
+            console.log('/-/ Atributos Actual Mensaje:', sessionAttributes.atributoActualMensaje);
+            console.log("---------------------------------------");
+            console.log('/-/ Atributos Restantes:', sessionAttributes.atributosRestantes);
+            console.log("---------------------------------------");
+            console.log('/-/ Inicializado contador de atributos capturados:', sessionAttributes.atributosCapturados);
+        }
+
+        // Verificar si el slot tiene valor
+        const slotAtributo = event.sessionState.intent.slots?.atributosCapturados?.value?.interpretedValue;
+        console.log('/-/ Valor actual del slot atributosCapturados:', slotAtributo);
+
+        if (sessionAttributes.atributosCapturados < sessionAttributes.numeroTotalAtributos) {
+            console.log(' /-/Atributos capturados vs total:',
+                `${sessionAttributes.atributosCapturados}/${sessionAttributes.numeroTotalAtributos}`);
+
+            if (!slotAtributo) {
+                console.log('/-/ No hay valor en el slot, solicitando al usuario...');
                 return {
                     sessionState: {
                         dialogAction: {
                             type: "ElicitSlot",
-                            slotToElicit: "tamanioOrden"
+                            slotToElicit: "atributosCapturados"
                         },
                         intent: {
-                            name: "OrdenarIntent",
+                            name: event.sessionState.intent.name,
                             state: "InProgress",
                             slots: event.sessionState.intent.slots
                         },
@@ -954,24 +999,82 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                     messages: [
                         {
                             contentType: "PlainText",
-                            content: "¿De qué tamaño deseas tu orden?"
+                            content: sessionAttributes.atributoActualMensaje
                         }
                     ]
                 };
             }
 
-            // Guardar el tamaño en las variables de sesión
-            sessionAttributes.tamanioDeLoOrdenado = slotTamanioOrden;
+            // Guardar el valor capturado con categoría incluida
+            console.log("/-/ Aqui empieza el proceso de guardar una variable de sesion acorde al atributo capturado");
+            const atributoKey = `atributo_${sessionAttributes.atributoActualNombre.toLowerCase()}_${sessionAttributes.categoriaIdentificada.toLowerCase()}`;
+            sessionAttributes[atributoKey] = slotAtributo;
+            console.log(`/-/ Guardado valor "${slotAtributo}" para ${atributoKey}`);
+
+
+            // Actualizar userInput con el nuevo atributo
+            userInput = sessionAttributes.userInputOriginal + " " + slotAtributo;
+            sessionAttributes.userInputOriginal = userInput;
+            console.log('/-/ UserInput actualizado:', userInput);
+
+            sessionAttributes.atributosCapturados++;
+            console.log('/-/ Incrementado contador de atributos a:', sessionAttributes.atributosCapturados);
+
+            // Preparar siguiente atributo si existe
+            if (sessionAttributes.atributosRestantes) {
+                console.log('/-/ Validacion para ver si existen atributos restantes');
+                const atributosRestantes = JSON.parse(sessionAttributes.atributosRestantes);
+
+                if (atributosRestantes.length > 0) {
+                    console.log('/-/ EXISTEN atributos restantes');
+
+                    const siguienteAtributo = atributosRestantes[0];
+                    sessionAttributes.atributoActualNombre = siguienteAtributo.nombre;
+                    sessionAttributes.atributoActualValores = siguienteAtributo.valoresAceptables;
+                    sessionAttributes.atributoActualMensaje = siguienteAtributo.mensajeSolicitud;
+                    sessionAttributes.atributosRestantes = JSON.stringify(atributosRestantes.slice(1));
+                    console.log('/-/ Nuevo atributo actual configurado:', siguienteAtributo);
+
+                    // Limpiar el slot y forzar nueva captura
+                    console.log('/-/ Limpiando slot atributosCapturados para siguiente atributo');
+
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "ElicitSlot",
+                                slotToElicit: "atributosCapturados"
+                            },
+                            intent: {
+                                name: event.sessionState.intent.name,
+                                state: "InProgress",
+                                slots: {
+                                    ...event.sessionState.intent.slots,
+                                    atributosCapturados: null // Limpiar el slot
+                                }
+                            },
+                            sessionAttributes: sessionAttributes
+                        },
+                        messages: [
+                            {
+                                contentType: "PlainText",
+                                content: sessionAttributes.atributoActualMensaje
+                            }
+                        ]
+                    };
+
+
+                } else {
+                    delete sessionAttributes.atributosRestantes;
+                    console.log('/-/ No hay más atributos restantes');
+                }
+
+            }
         }
 
 
-        // Concatenar el tamaño a userInput antes de procesar con ChatGPT
-        userInput = `${userInput} ${sessionAttributes.tamanioDeLoOrdenado}`;
-        console.log("Input final con tamaño especificado:", userInput);
-
         // Continuar con el procesamiento de la orden
-        console.log("Se procederá a utilizar ChatGPT para empezar con el proceso de toma de orden");
-        console.log("Este es el userInput que se estara procesando con llamadaAChatGPTParaOrdenar: ", userInput);
+        console.log(" || Se procederá a utilizar ChatGPT para empezar con el proceso de toma de orden");
+        console.log(" || Este es el userInput que se estara procesando con llamadaAChatGPTParaOrdenar: ", userInput);
         let ordenarGPT = await llamadaAChatGPTParaOrdenar(userInput, menuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
@@ -988,9 +1091,33 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         sessionAttributes.comentariosOrden = orderInfo.comentarios;
         sessionAttributes.totalCosto = orderInfo.totalCosto;
 
+        console.log('/- Iniciando limpieza de variables de sesión de atributos...');
+
         delete sessionAttributes.initialInput;
         delete sessionAttributes.tamanioDeLoOrdenado;
         delete sessionAttributes.ordenParaProcesar;
+
+        delete sessionAttributes.categoriaIdentificada;
+        delete sessionAttributes.numeroTotalAtributos;
+        delete sessionAttributes.atributosCapturados;
+        delete sessionAttributes.userInputOriginal;
+
+        // Limpiar variables del atributo actual
+        delete sessionAttributes.atributoActualNombre;
+        delete sessionAttributes.atributoActualValores;
+        delete sessionAttributes.atributoActualMensaje;
+        delete sessionAttributes.atributosRestantes;
+
+        // Limpiar atributos específicos capturados (usando un patrón)
+        Object.keys(sessionAttributes).forEach(key => {
+            if (key.startsWith('atributo_')) {
+                delete sessionAttributes[key];
+                console.log(`/-/ Eliminada variable de sesión: ${key}`);
+            }
+        });
+
+        console.log('/-/ Limpieza de variables de sesión completada');
+
 
         console.log("Se han actualizado los atributos de sesión actuales para ordenar:", JSON.stringify(sessionAttributes, null, 2));
 
@@ -3070,6 +3197,20 @@ async function getCostosDeEnvio() {
     }
 }
 
+async function getCategoriaMenu() {
+    console.log("Iniciando consulta a la hoja 'CATEGORIA MENU'");
+
+    try {
+        const categoriaMenu = await axios.get(`${SHEET_BEST_API_URL}/tabs/CATEGORIAS%20MENU`);
+        console.log("Respuesta completa de la hoja 'CATEGORIA MENU':", categoriaMenu.data);
+
+        return categoriaMenu.data;
+    } catch (error) {
+        console.error("Error al obtener datos de la hoja 'CATEGORIA MENU':", error);
+        throw error;
+    }
+}
+
 //Metodos para consultar a ChatGPT a traves de la API de OpenAI
 async function interpretarIntent(userInput) {
 
@@ -3915,6 +4056,83 @@ async function analizarDepartamentoEnInput(userInput, costosDeEnvio) {
 
     } catch (error) {
         console.error("Error al analizar departamento:", error);
+        throw error;
+    }
+}
+
+async function analizarCategoriaYAtributos(userInput, menuData, categoriaMenuData) {
+
+    //const prompts = await getPrompts('analizarCategoriaYAtributos');
+
+    const systemPrompt = `
+    Eres un asistente especializado en analizar pedidos de restaurante.
+    
+    Tienes acceso al siguiente menú:
+    ${JSON.stringify(menuData, null, 2)}
+    
+    Y a la siguiente información de categorías y atributos:
+    ${JSON.stringify(categoriaMenuData, null, 2)}
+    
+    Tu tarea es analizar el pedido del usuario y determinar:
+    1. La categoría exacta a la que pertenece el pedido
+    2. Contar cuántos atributos tiene esa categoría
+    3. Obtener los atributos y sus valores aceptables
+    4. Generar mensajes apropiados para solicitar cada atributo
+    `;
+
+    const userPrompt = `
+    Analiza el siguiente pedido:
+    "${userInput}"
+    
+    Debes responder con un objeto JSON que contenga:
+    {
+        "categoria": "nombre de la categoría identificada",
+        "numeroAtributos": número de atributos encontrados para esta categoría,
+        "atributos": [
+            {
+                "nombre": "nombre del atributo",
+                "valoresAceptables": "valor1, valor2, valor3",
+                "mensajeSolicitud": "¿[Pregunta personalizada]? Las opciones son: [valores aceptables]"
+            }
+        ]
+    }
+    `;
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        console.log("---Valor de la respuesta para analizar categoria y atributos apoyandose de ChatGPT ---");
+        console.log(contenido);
+        console.log("--------------------------------------------------------------------------------------");
+
+        return JSON.parse(contenido);
+
+    } catch (error) {
+        console.error("Error al analizar categoría y atributos:", error);
         throw error;
     }
 }
