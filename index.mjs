@@ -332,6 +332,73 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
     // Verificar slots requeridos antes de proceder con la orden
     let slots = event.sessionState.intent.slots || {};
 
+    // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
+    const tieneOrdenActiva = sessionAttributes.orden &&
+        sessionAttributes.totalUnidades !== undefined &&
+        (sessionAttributes.totalCosto !== undefined);
+
+    console.log("Existe alguna orden activa? :", tieneOrdenActiva);
+
+    if (tieneOrdenActiva) {
+        console.log("SI ha encontrado alguna orden activa")
+
+        if (!sessionAttributes.fallbackCount) {
+            sessionAttributes.fallbackCount = 1;
+        } else {
+            sessionAttributes.fallbackCount++;
+        }
+
+        console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+        if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    },
+                    sessionAttributes: {
+                        ...sessionAttributes,
+                        requiresHumanIntervention: true,
+                        reason: "El cliente realizó multiples intentos para ordenar a pesar de que ya tiene una orden activa. Contactar para validar si tiene dificultades"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                    }
+                ]
+            };
+        }
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, ya tienes una orden activa."
+                },
+                {
+                    contentType: "PlainText",
+                    content: "Solo puedes tener una orden activa a la vez."
+                }
+            ]
+        };
+    }
+
     try {
 
         console.log("----Se empezará a tomar datos del cliente antes de proceder con la toma de orden----")
@@ -1129,20 +1196,6 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             content: `Gracias por brindarme tus datos.`
         });
 
-        // Agregar el resumen 
-        mensajes.push({
-            contentType: "PlainText",
-            content: `Retomando desde antes que te pidiera los datos de envío, tu orden estaría conformada de la siguiente manera:\n\n ${orderInfo.orden}`
-        });
-
-        // Agregar los comentarios, si existen
-        if (orderInfo.comentarios) {
-            mensajes.push({
-                contentType: "PlainText",
-                content: `Comentarios:\n ${orderInfo.comentarios}`
-            });
-        }
-
         // Mensaje adicional preguntando si necesita más ayuda
         mensajes.push({
             contentType: "PlainText",
@@ -1273,96 +1326,94 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
     let nuevoInput;
 
-    // Primero validar si existe ordenParaProcesar
-    if (sessionAttributes.ordenParaProcesar) {
-        nuevoInput = elementoPrevio + " " + inputDirecto;
-        console.log("Valor de nuevoInput obtenido de elementoPrevio: ", nuevoInput);
-        // Limpiar el valor para que no se use en futuras iteraciones
-        delete sessionAttributes.ordenParaProcesar;
-    } else {
 
-        // Verificar si es una orden directa 
-        const isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
-        console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder);
-
-        if (!isDirectOrder && inputSlot == null) {
-
-            console.log("NO es considerado una orden directa")
-
-            nuevoInput = inputSlot;
-            console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
-
-            let resumenActual = `Tu orden actual incluye: ${sessionAttributes.orden} \n`;
-
-            resumenActual += `\nTotal a pagar: $${sessionAttributes.totalCosto}`;
+    console.log("Contenido event.sessionState.intent.slots.atributosCapturados: ", event.sessionState.intent.slots.atributosCapturados);
+    console.log("Resultado de !(event.sessionState.intent.slots.atributosCapturados):", !(event.sessionState.intent.slotsatributosCapturados));
+    console.log("Condición quese usara en el IF:", sessionAttributes.ordenParaProcesar && !(event.sessionState.intent.slots.atributosCapturados));
 
 
-            if (sessionAttributes.comentariosOrden) {
-                resumenActual += `\n\nComentarios:\n${sessionAttributes.comentariosOrden}`;
-            }
 
-            // Preparar los mensajes base
-            const mensajes = [
-                {
-                    contentType: "PlainText",
-                    content: resumenActual
-                }
-            ];
+    if (!(event.sessionState.intent.slots.atributosCapturados)) {
+        console.log("-- Si este flujo esta activo es porque aun no se esta capturando atributos usando atributosCapturados //");
 
-            // Obtener datos de imágenes
-            const imagenesData = await getImagenes();
-
-            // Buscar la imagen específica para el menú
-            const imagenMenu = imagenesData.find(imagen => imagen.Nombre === "Menu");
-            console.log("Contenido de imagenMenu:", imagenMenu);
-
-            // Agregar mensaje inicial
-            mensajes.push({
-                contentType: "PlainText",
-                content: "A continuación, te presento el menú:"
-            });
-
-
-            //Agregar imagen del menú
-            if (imagenMenu) {
-                console.log("La imagen del menu existe, se estará agregando la misma al mensaje.");
-                mensajes.push({
-                    contentType: "ImageResponseCard",
-                    imageResponseCard: {
-                        title: "Nuestro Menú",
-                        imageUrl: imagenMenu.Link,
-
-                    }
-                });
-                console.log("Imagen agregada correctamente a la respuesta");
-            }
-
-            // Agregar mensaje final
-            mensajes.push({
-                contentType: "PlainText",
-                content: "¿Qué te gustaria agregar a tu orden?"
-            });
-
-
-            return {
-                sessionState: {
-                    dialogAction: {
-                        type: "ElicitSlot",
-                        slotToElicit: "nuevaOrden"
-                    },
-                    intent: {
-                        name: event.sessionState.intent.name,
-                        state: "InProgress"
-                    },
-                    sessionAttributes: sessionAttributes
-                },
-                messages: mensajes
-            };
-
+        // Primero validar si existe ordenParaProcesar
+        if (sessionAttributes.ordenParaProcesar) {
+            nuevoInput = elementoPrevio + " " + inputDirecto;
+            console.log("Valor de nuevoInput obtenido de elementoPrevio: ", nuevoInput);
+            // Limpiar el valor para que no se use en futuras iteraciones
+            delete sessionAttributes.ordenParaProcesar;
         } else {
-            nuevoInput = inputDirecto;
+
+            // Verificar si es una orden directa 
+            const isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
+            console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder);
+
+            if (!isDirectOrder && inputSlot == null) {
+
+                console.log("NO es considerado una orden directa")
+
+                nuevoInput = inputSlot;
+                console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
+
+                // Preparar los mensajes base
+                let mensajes = [];
+
+                // Obtener datos de imágenes
+                const imagenesData = await getImagenes();
+
+                // Buscar la imagen específica para el menú
+                const imagenMenu = imagenesData.find(imagen => imagen.Nombre === "Menu");
+                console.log("Contenido de imagenMenu:", imagenMenu);
+
+                // Agregar mensaje inicial
+                mensajes.push({
+                    contentType: "PlainText",
+                    content: "A continuación, te presento el menú:"
+                });
+
+
+                //Agregar imagen del menú
+                if (imagenMenu) {
+                    console.log("La imagen del menu existe, se estará agregando la misma al mensaje.");
+                    mensajes.push({
+                        contentType: "ImageResponseCard",
+                        imageResponseCard: {
+                            title: "Nuestro Menú",
+                            imageUrl: imagenMenu.Link,
+
+                        }
+                    });
+                    console.log("Imagen agregada correctamente a la respuesta");
+                }
+
+                // Agregar mensaje final
+                mensajes.push({
+                    contentType: "PlainText",
+                    content: "¿Qué te gustaria agregar a tu orden?"
+                });
+
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "nuevaOrden"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "InProgress"
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: mensajes
+                };
+
+            } else {
+                nuevoInput = inputDirecto;
+            }
         }
     }
+
 
     // Procesamiento de categorias
     if (sessionAttributes.esperandoSeleccionCategoria) {
@@ -1440,6 +1491,143 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         }
     }
 
+    // Obtener información de categorías si aún no la tenemos
+    if (!sessionAttributes.categoriaIdentificada) {
+        console.log('=== Inicio del proceso de captura de atributos ===');
+        console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
+
+        const categoriaMenuData = await getCategoriaMenu();
+        console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
+
+        console.log('/-/ Procesando categoría y atributos para input:', nuevoInput);
+        const categoriaInfo = await analizarCategoriaYAtributos(nuevoInput, menuData, categoriaMenuData);
+        console.log('/-/ Información de categoría procesada:', categoriaInfo);
+
+        // Guardar información básica
+        sessionAttributes.categoriaIdentificada = categoriaInfo.categoria;
+        sessionAttributes.numeroTotalAtributos = categoriaInfo.numeroAtributos;
+        sessionAttributes.atributosCapturados = 0;
+        sessionAttributes.userInputOriginal = nuevoInput; // Guardar input original
+
+        // Guardar información del primer atributo
+        if (categoriaInfo.atributos && categoriaInfo.atributos.length > 0) {
+            const primerAtributo = categoriaInfo.atributos[0];
+            sessionAttributes.atributoActualNombre = primerAtributo.nombre;
+            sessionAttributes.atributoActualValores = primerAtributo.valoresAceptables;
+            sessionAttributes.atributoActualMensaje = primerAtributo.mensajeSolicitud;
+            // Guardar todos los atributos como string JSON para recuperarlos después
+            sessionAttributes.atributosRestantes = JSON.stringify(categoriaInfo.atributos.slice(1));
+        }
+
+        console.log('/-/ Categoría identificada:', sessionAttributes.categoriaIdentificada);
+        console.log('/-/ Número total de atributos:', sessionAttributes.numeroTotalAtributos);
+        console.log('/-/ Atributos Actual Nombre:', sessionAttributes.atributoActualNombre);
+        console.log('/-/ Atributos Actual Valores:', sessionAttributes.atributoActualValores);
+        console.log('/-/ Atributos Actual Mensaje:', sessionAttributes.atributoActualMensaje);
+        console.log("---------------------------------------");
+        console.log('/-/ Atributos Restantes:', sessionAttributes.atributosRestantes);
+        console.log("---------------------------------------");
+        console.log('/-/ Inicializado contador de atributos capturados:', sessionAttributes.atributosCapturados);
+    }
+
+    // Verificar si el slot tiene valor
+    const slotAtributo = event.sessionState.intent.slots?.atributosCapturados?.value?.interpretedValue;
+    console.log('/-/ Valor actual del slot atributosCapturados:', slotAtributo);
+
+    if (sessionAttributes.atributosCapturados < sessionAttributes.numeroTotalAtributos) {
+        console.log(' /-/Atributos capturados vs total:',
+            `${sessionAttributes.atributosCapturados}/${sessionAttributes.numeroTotalAtributos}`);
+
+        if (!slotAtributo) {
+            console.log('/-/ No hay valor en el slot, solicitando al usuario...');
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "ElicitSlot",
+                        slotToElicit: "atributosCapturados"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "InProgress",
+                        slots: event.sessionState.intent.slots
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: sessionAttributes.atributoActualMensaje
+                    }
+                ]
+            };
+        }
+
+        // Guardar el valor capturado con categoría incluida
+        console.log("/-/ Aqui empieza el proceso de guardar una variable de sesion acorde al atributo capturado");
+        const atributoKey = `atributo_${sessionAttributes.atributoActualNombre.toLowerCase()}_${sessionAttributes.categoriaIdentificada.toLowerCase()}`;
+        sessionAttributes[atributoKey] = slotAtributo;
+        console.log(`/-/ Guardado valor "${slotAtributo}" para ${atributoKey}`);
+
+
+        // Actualizar nuevoInput con el nuevo atributo
+        nuevoInput = sessionAttributes.userInputOriginal + " " + slotAtributo;
+        sessionAttributes.userInputOriginal = nuevoInput;
+        console.log('/-/ nuevoInput actualizado:', nuevoInput);
+
+        sessionAttributes.atributosCapturados++;
+        console.log('/-/ Incrementado contador de atributos a:', sessionAttributes.atributosCapturados);
+
+        // Preparar siguiente atributo si existe
+        if (sessionAttributes.atributosRestantes) {
+            console.log('/-/ Validacion para ver si existen atributos restantes');
+            const atributosRestantes = JSON.parse(sessionAttributes.atributosRestantes);
+
+            if (atributosRestantes.length > 0) {
+                console.log('/-/ EXISTEN atributos restantes');
+
+                const siguienteAtributo = atributosRestantes[0];
+                sessionAttributes.atributoActualNombre = siguienteAtributo.nombre;
+                sessionAttributes.atributoActualValores = siguienteAtributo.valoresAceptables;
+                sessionAttributes.atributoActualMensaje = siguienteAtributo.mensajeSolicitud;
+                sessionAttributes.atributosRestantes = JSON.stringify(atributosRestantes.slice(1));
+                console.log('/-/ Nuevo atributo actual configurado:', siguienteAtributo);
+
+                // Limpiar el slot y forzar nueva captura
+                console.log('/-/ Limpiando slot atributosCapturados para siguiente atributo');
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "atributosCapturados"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "InProgress",
+                            slots: {
+                                ...event.sessionState.intent.slots,
+                                atributosCapturados: null // Limpiar el slot
+                            }
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: sessionAttributes.atributoActualMensaje
+                        }
+                    ]
+                };
+
+
+            } else {
+                delete sessionAttributes.atributosRestantes;
+                console.log('/-/ No hay más atributos restantes');
+            }
+
+        }
+    }
+
 
 
     try {
@@ -1451,6 +1639,8 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
             totalCosto: sessionAttributes.totalCosto || 0,
             comentarios: sessionAttributes.comentariosOrden || ""
         };
+
+        console.log("--nuevoInput tiene el siguiente valor antes de la llamada a ChatGPT para añadir: --", nuevoInput)
 
         const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual, menuData);
 
@@ -1468,26 +1658,40 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         sessionAttributes.totalCosto = orderInfo.totalCosto;
         sessionAttributes.comentariosOrden = orderInfo.comentarios;
 
+        console.log('/-/ Inicio de Limpieza de variables de sesión');
+
         delete sessionAttributes.initialInput;
+
+        delete sessionAttributes.categoriaIdentificada;
+        delete sessionAttributes.numeroTotalAtributos;
+        delete sessionAttributes.atributosCapturados;
+        delete sessionAttributes.userInputOriginal;
+
+        // Limpiar variables del atributo actual
+        delete sessionAttributes.atributoActualNombre;
+        delete sessionAttributes.atributoActualValores;
+        delete sessionAttributes.atributoActualMensaje;
+        delete sessionAttributes.atributosRestantes;
+
+        // Limpiar atributos específicos capturados (usando un patrón)
+        Object.keys(sessionAttributes).forEach(key => {
+            if (key.startsWith('atributo_')) {
+                delete sessionAttributes[key];
+                console.log(`/-/ Eliminada variable de sesión: ${key}`);
+            }
+        });
+
+        console.log('/-/ Limpieza de variables de sesión completada');
 
         console.log("Se han actualizado los atributos de sesión actuales para ordenar gracias a que se añadieron elementos:", JSON.stringify(sessionAttributes, null, 2));
 
         // Construir los mensajes separados
         let mensajes = [];
 
-        // Agregar el resumen al primer mensaje
         mensajes.push({
             contentType: "PlainText",
-            content: `Actualizando tu orden con lo que me mencionas, queda de la siguiente manera:\n\n${orderInfo.orden}`
-        });
-
-        // Agregar los comentarios como un tercer mensaje, si existen
-        if (orderInfo.comentarios) {
-            mensajes.push({
-                contentType: "PlainText",
-                content: `Comentarios:\n ${orderInfo.comentarios}`
-            });
-        }
+            content: "Listo, he agregado tu pedido a la orden."
+        })
 
         // Mensaje adicional preguntando si necesita más ayuda
         mensajes.push({
@@ -3045,7 +3249,7 @@ export async function getMenu() {
 
     try {
         const menu = await axios.get(`${SHEET_BEST_API_URL}/tabs/MENU`);
-        console.log("Respuesta completa de la hoja 'MENU':", menu);
+        console.log("Respuesta completa de la hoja 'MENU':", menu.data);
 
         return menu.data;
     } catch (error) {
