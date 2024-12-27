@@ -54,6 +54,13 @@ export const handler = async (event) => {
 
     }
 
+    if (intentName == 'ModificarOrdenIntent') {
+        console.log("Se esta activando esta parte por medio de ModificarOrdenIntent");
+
+        return handleModificarOrdenIntent(event, sessionAttributes);
+
+    }
+
     if (intentName == 'CancelarOrdenIntent') {
         console.log("Se esta activando esta parte por medio de CancelarOrdenIntent");
 
@@ -157,6 +164,10 @@ async function handlerIntents(event, sessionAttributes, intentInfo) {
         case 'handleAgregarAOrdenarIntent':
             console.log("Se estará redirigiendo hacia handleAgregarAOrdenarIntent");
             return handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, userInput);
+
+        case 'handleModificarOrdenIntent':
+            console.log("Se estará redirigiendo hacia handleModificarOrdenIntent");
+            return handleModificarOrdenIntent(event, sessionAttributes);
 
         case 'handleFinalizarOrdenIntent':
             console.log("Se estará redirigiendo hacia handleFinalizarOrdenIntent");
@@ -890,9 +901,9 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
         // Verificar si es una orden directa 
         const isDirectOrder = await verificarSiEsOrdenDirecta(userInput, menuData);
-        console.log("Es orden directa? :", isDirectOrder);
+        console.log("Es orden directa? :", isDirectOrder.isDirectOrder);
 
-        if (!isDirectOrder && !elementoPrevio) {
+        if (!isDirectOrder.isDirectOrder && !elementoPrevio) {
             console.log("No es una orden directa. Se verificará el slot 'ordenUsuario'.");
 
             // Verificar si el slot 'ordenUsuario' tiene valor
@@ -1346,9 +1357,9 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
             // Verificar si es una orden directa 
             const isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
-            console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder);
+            console.log("Es orden directa para agregar algo a la orden? :", isDirectOrder.isDirectOrder);
 
-            if (!isDirectOrder && inputSlot == null) {
+            if (!isDirectOrder.isDirectOrder && inputSlot == null) {
 
                 console.log("NO es considerado una orden directa")
 
@@ -1547,7 +1558,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
                         slotToElicit: "atributosCapturados"
                     },
                     intent: {
-                        name: event.sessionState.intent.name,
+                        name: "AgregarAOrdenIntent",
                         state: "InProgress",
                         slots: event.sessionState.intent.slots
                     },
@@ -1602,7 +1613,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
                             slotToElicit: "atributosCapturados"
                         },
                         intent: {
-                            name: event.sessionState.intent.name,
+                            name: "AgregarAOrdenIntent",
                             state: "InProgress",
                             slots: {
                                 ...event.sessionState.intent.slots,
@@ -1739,6 +1750,558 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
     }
 
+
+}
+
+
+async function handleModificarOrdenIntent(event, sessionAttributes) {
+
+    console.log('=== Inicio de handleModificarOrdenIntent ===');
+    console.log('[-] Evento recibido:', JSON.stringify(event, null, 2));
+    console.log('[-] Atributos de sesión actuales:', JSON.stringify(sessionAttributes, null, 2));
+
+    let userInput = event.inputTranscript.toLowerCase();
+    console.log("Input obtenido de la conversación: ", userInput);
+
+    console.log("Preparando respuesta para modificar orden");
+
+    // Obtener datos actualizados del menú
+    const menuData = await getMenu();
+
+    // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
+    const tieneOrdenActiva = sessionAttributes.orden &&
+        sessionAttributes.totalUnidades !== undefined &&
+        (sessionAttributes.totalCosto !== undefined);
+
+    console.log("Existe alguna orden activa? :", tieneOrdenActiva);
+
+    if (!tieneOrdenActiva) {
+        console.log("NO se ha encontrado alguna orden activa")
+
+        if (!sessionAttributes.fallbackCount) {
+            sessionAttributes.fallbackCount = 1;
+        } else {
+            sessionAttributes.fallbackCount++;
+        }
+
+        console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+        if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    },
+                    sessionAttributes: {
+                        ...sessionAttributes,
+                        requiresHumanIntervention: true,
+                        reason: "El cliente realizó multiples intentos para modificar una orden que no se encuentra activa. Contactar para validar si tiene dificultades"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                    }
+                ]
+            };
+        }
+
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, no hay una orden activa a la cual le puedas modificar sus elementos."
+                },
+                {
+                    contentType: "PlainText",
+                    content: "Por favor, primero realiza un pedido."
+                }
+            ]
+        };
+    }
+
+    // Obtener el input del usuario, ya sea del slot o del evento original
+    let inputSlot = event.sessionState.intent.slots?.cambiarEnOrden?.value?.interpretedValue;
+    console.log("Valor del Input capturado a partir del Slot: ", inputSlot);
+
+    if (!sessionAttributes.inputSlotSesion) {
+        sessionAttributes.inputSlotSesion = inputSlot;
+        console.log("**/- Se han guardado las intrucciones para inputSlotSesion:", sessionAttributes.inputSlotSesion);
+    }
+
+    let inputDirecto = event.inputTranscript.toLowerCase();
+    console.log("Valor del Input capturado directamente: ", inputDirecto);
+
+    let nuevoInput;
+    let isDirectOrder;
+
+
+
+    console.log("Contenido event.sessionState.intent.slots.atributosCapturados: ", event.sessionState.intent.slots.atributosCapturados);
+    console.log("++ Resultado de !(event.sessionState.intent.slots.atributosCapturados):", !(event.sessionState.intent.slotsatributosCapturados));
+    console.log("++ Resultado de !(event.sessionState.intent.slots.cambiarEnOrden):", !(event.sessionState.intent.slots.cambiarEnOrden));
+
+    if (!(event.sessionState.intent.slots.atributosCapturados)) {
+        console.log("-- Si este flujo esta activo es porque AUN NO se esta capturando atributos usando atributosCapturados //");
+
+        // Verificar si es una orden directa 
+        nuevoInput = inputSlot;
+        console.log("****Valor de nuevoInput en estos momentos: ", nuevoInput);
+        console.log("****");
+
+        isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
+
+        console.log("Es orden directa para modificar algo a la orden? :", isDirectOrder.isDirectOrder);
+
+        if (!(event.sessionState.intent.slots.cambiarEnOrden)) {
+            console.log("-- Si este flujo esta activo es porque se validara si es orden directa o no //");
+
+            if (!isDirectOrder.isDirectOrder && inputSlot == null) {
+
+                console.log("NO es considerado una orden directa")
+
+                nuevoInput = inputSlot;
+                console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
+
+                if (isDirectOrder.isModificar) {
+                    console.log("Existe valor para isDirectOrder.isModificar!");
+                    if (!sessionAttributes.esModificarPorSlot) {
+                        sessionAttributes.esModificarPorSlot = isDirectOrder.isModificar;
+                        console.log("**/- Se han guardado las intrucciones para esModificarPorSlot:", sessionAttributes.esModificarPorSlot);
+                    }
+                }
+
+
+                // Preparar los mensajes base
+                let mensajes = [];
+
+                if (isDirectOrder.isEliminar) {
+                    sessionAttributes.accionModificacion = "quiero eliminar";
+                    console.log("--Valor de sessionAttributes.accionModificacion : ", sessionAttributes.accionModificacion);
+
+                    // Agregar mensaje inicial
+                    mensajes.push({
+                        contentType: "PlainText",
+                        content: "Muy bien, ¿qué te gustaria remover de tu pedido?"
+                    });
+                } else {
+
+                    sessionAttributes.accionModificacion = "quiero cambiar";
+                    console.log("--Valor de sessionAttributes.accionModificacion : ", sessionAttributes.accionModificacion);
+
+                    // Agregar mensaje inicial
+                    mensajes.push({
+                        contentType: "PlainText",
+                        content: "Muy bien, ¿qué te gustaria cambiar de tu pedido?"
+                    });
+                }
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "cambiarEnOrden"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "InProgress"
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: mensajes
+                };
+
+            } else {
+                nuevoInput = inputDirecto;
+
+                // Guardar instrucciones modificacion si no existen
+                if (!sessionAttributes.instruccionesModificacion && nuevoInput) {
+                    sessionAttributes.instruccionesModificacion = nuevoInput;
+                    console.log("**/- Se han guardado las intrucciones para la modificacion:", sessionAttributes.instruccionesModificacion);
+                }
+
+            }
+        }
+
+
+    }
+
+
+    if (sessionAttributes.accionModificacion && sessionAttributes.esModificarPorSlot) {
+        console.log("Existen valores para accionModificacion y esModificarPorSlot. Se actualizara el valor en nuevoInput");
+        nuevoInput = sessionAttributes.accionModificacion + " " + sessionAttributes.inputSlotSesion;
+        console.log("|| El valor de nuevoInput es:", nuevoInput);
+
+    }
+
+    if (!sessionAttributes.esModificar) {
+        sessionAttributes.esModificar = isDirectOrder.isModificar;
+        console.log("**/- Se han guardado las intrucciones para esModificar:", sessionAttributes.esModificar);
+    }
+
+    if (sessionAttributes.esModificar || sessionAttributes.esModificarPorSlot) {
+
+
+        console.log("Valor de sessionAttributes.instruccionesModificacion:", sessionAttributes.instruccionesModificacion);
+
+        let isValidOrder;
+
+        //Verificar si es una orden válida
+        if (sessionAttributes.instruccionesModificacion) {
+            console.log("Se validara en si es orden valida CON sessionAttributes.instruccionesModificacio");
+            isValidOrder = await verificarSiEsOrdenValida(sessionAttributes.instruccionesModificacion, menuData);
+
+        } else {
+            console.log("Se validara en si es orden valida CON nuevoInput");
+            isValidOrder = await verificarSiEsOrdenValida(nuevoInput, menuData);
+
+        }
+
+        console.log("Es orden valida? :", isValidOrder.isValidOrder);
+
+        if (!isValidOrder.isValidOrder) {
+
+            console.log("NO es una orden valida la que se desea realizar");
+
+            if (!sessionAttributes.fallbackCount) {
+                sessionAttributes.fallbackCount = 1;
+            } else {
+                sessionAttributes.fallbackCount++;
+            }
+
+            console.log("Valor de fallbackCount en estos momentos:", sessionAttributes.fallbackCount)
+
+            if (sessionAttributes.fallbackCount >= MAX_FALLBACKS) {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: event.sessionState.intent.name,
+                            state: "Failed"
+                        },
+                        sessionAttributes: {
+                            ...sessionAttributes,
+                            requiresHumanIntervention: true,
+                            reason: "El cliente realizó multiples intentos para modificar algo que no es valido. Contactar para validar si tiene dificultades"
+                        }
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: "Veo que estás teniendo dificultades. Te conectaré con un agente humano que podrá ayudarte mejor."
+                        }
+                    ]
+                };
+            }
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: event.sessionState.intent.name,
+                        state: "Failed"
+                    }
+                },
+                messages: [
+                    {
+                        contentType: "PlainText",
+                        content: "Lo siento, lo que tratas de modificar no forma parte del lo que ofrecemos."
+                    },
+                    {
+                        contentType: "PlainText",
+                        content: "Puedes consultar el menú para poder checar nuestras opciones y asi procesar tu cambio correctamente."
+                    }
+                ]
+            };
+        }
+
+        // Obtener información de categorías si aún no la tenemos
+        if (!sessionAttributes.categoriaIdentificada) {
+            console.log('=== Inicio del proceso de captura de atributos ===');
+            console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
+
+            const categoriaMenuData = await getCategoriaMenu();
+            console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
+
+            console.log('/-/ Procesando categoría y atributos para input:', nuevoInput);
+            const categoriaInfo = await analizarCategoriaYAtributos(nuevoInput, menuData, categoriaMenuData);
+            console.log('/-/ Información de categoría procesada:', categoriaInfo);
+
+            // Guardar información básica
+            sessionAttributes.categoriaIdentificada = categoriaInfo.categoria;
+            sessionAttributes.numeroTotalAtributos = categoriaInfo.numeroAtributos;
+            sessionAttributes.atributosCapturados = 0;
+            sessionAttributes.userInputOriginal = nuevoInput; // Guardar input original
+
+            // Guardar información del primer atributo
+            if (categoriaInfo.atributos && categoriaInfo.atributos.length > 0) {
+                const primerAtributo = categoriaInfo.atributos[0];
+                sessionAttributes.atributoActualNombre = primerAtributo.nombre;
+                sessionAttributes.atributoActualValores = primerAtributo.valoresAceptables;
+                sessionAttributes.atributoActualMensaje = primerAtributo.mensajeSolicitud;
+                // Guardar todos los atributos como string JSON para recuperarlos después
+                sessionAttributes.atributosRestantes = JSON.stringify(categoriaInfo.atributos.slice(1));
+            }
+
+            console.log('/-/ Categoría identificada:', sessionAttributes.categoriaIdentificada);
+            console.log('/-/ Número total de atributos:', sessionAttributes.numeroTotalAtributos);
+            console.log('/-/ Atributos Actual Nombre:', sessionAttributes.atributoActualNombre);
+            console.log('/-/ Atributos Actual Valores:', sessionAttributes.atributoActualValores);
+            console.log('/-/ Atributos Actual Mensaje:', sessionAttributes.atributoActualMensaje);
+            console.log("---------------------------------------");
+            console.log('/-/ Atributos Restantes:', sessionAttributes.atributosRestantes);
+            console.log("---------------------------------------");
+            console.log('/-/ Inicializado contador de atributos capturados:', sessionAttributes.atributosCapturados);
+        }
+
+        // Verificar si el slot tiene valor
+        const slotAtributo = event.sessionState.intent.slots?.atributosCapturados?.value?.interpretedValue;
+        console.log('/-/ Valor actual del slot atributosCapturados:', slotAtributo);
+
+        if (sessionAttributes.atributosCapturados < sessionAttributes.numeroTotalAtributos) {
+            console.log(' /-/Atributos capturados vs total:',
+                `${sessionAttributes.atributosCapturados}/${sessionAttributes.numeroTotalAtributos}`);
+
+            if (!slotAtributo) {
+                console.log('/-/ No hay valor en el slot, solicitando al usuario...');
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "atributosCapturados"
+                        },
+                        intent: {
+                            name: "ModificarOrdenIntent",
+                            state: "InProgress",
+                            slots: event.sessionState.intent.slots
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [
+                        {
+                            contentType: "PlainText",
+                            content: sessionAttributes.atributoActualMensaje
+                        }
+                    ]
+                };
+            }
+
+            // Guardar el valor capturado con categoría incluida
+            console.log("/-/ Aqui empieza el proceso de guardar una variable de sesion acorde al atributo capturado");
+            const atributoKey = `atributo_${sessionAttributes.atributoActualNombre.toLowerCase()}_${sessionAttributes.categoriaIdentificada.toLowerCase()}`;
+            sessionAttributes[atributoKey] = slotAtributo;
+            console.log(`/-/ Guardado valor "${slotAtributo}" para ${atributoKey}`);
+
+
+            // Actualizar nuevoInput con el nuevo atributo
+            if (sessionAttributes.instruccionesModificacion) {
+                nuevoInput = sessionAttributes.userInputOriginal + " " + slotAtributo;
+                sessionAttributes.userInputOriginal = nuevoInput;
+                sessionAttributes.instruccionesModificacion = sessionAttributes.userInputOriginal;
+                console.log('/-/ sessionAttributes.instruccionesModificacion actualizado:', sessionAttributes.instruccionesModificacion);
+            } else {
+                nuevoInput = sessionAttributes.userInputOriginal + " " + slotAtributo;
+                sessionAttributes.userInputOriginal = nuevoInput;
+                console.log('/-/ nuevoInput actualizado:', nuevoInput);
+            }
+
+            sessionAttributes.atributosCapturados++;
+            console.log('/-/ Incrementado contador de atributos a:', sessionAttributes.atributosCapturados);
+
+            // Preparar siguiente atributo si existe
+            if (sessionAttributes.atributosRestantes) {
+                console.log('/-/ Validacion para ver si existen atributos restantes');
+                const atributosRestantes = JSON.parse(sessionAttributes.atributosRestantes);
+
+                if (atributosRestantes.length > 0) {
+                    console.log('/-/ EXISTEN atributos restantes');
+
+                    const siguienteAtributo = atributosRestantes[0];
+                    sessionAttributes.atributoActualNombre = siguienteAtributo.nombre;
+                    sessionAttributes.atributoActualValores = siguienteAtributo.valoresAceptables;
+                    sessionAttributes.atributoActualMensaje = siguienteAtributo.mensajeSolicitud;
+                    sessionAttributes.atributosRestantes = JSON.stringify(atributosRestantes.slice(1));
+                    console.log('/-/ Nuevo atributo actual configurado:', siguienteAtributo);
+
+                    // Limpiar el slot y forzar nueva captura
+                    console.log('/-/ Limpiando slot atributosCapturados para siguiente atributo');
+
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "ElicitSlot",
+                                slotToElicit: "atributosCapturados"
+                            },
+                            intent: {
+                                name: "ModificarOrdenIntent",
+                                state: "InProgress",
+                                slots: {
+                                    ...event.sessionState.intent.slots,
+                                    atributosCapturados: null // Limpiar el slot
+                                }
+                            },
+                            sessionAttributes: sessionAttributes
+                        },
+                        messages: [
+                            {
+                                contentType: "PlainText",
+                                content: sessionAttributes.atributoActualMensaje
+                            }
+                        ]
+                    };
+
+
+                } else {
+                    delete sessionAttributes.atributosRestantes;
+                    console.log('/-/ No hay más atributos restantes');
+                }
+
+            }
+        }
+
+    }
+
+    try {
+
+        // Preparar el mensaje para ChatGPT incluyendo la orden actual
+        const ordenActual = {
+            orden: sessionAttributes.orden || "",
+            totalUnidades: sessionAttributes.totalUnidades || 0,
+            totalCosto: sessionAttributes.totalCosto || 0,
+            comentarios: sessionAttributes.comentariosOrden || ""
+        };
+
+        if (sessionAttributes.accionModificacion) {
+            console.log("EXISTE UN VALOR PARA sessionAttributes.instruccionesModificacion");
+            nuevoInput = sessionAttributes.accionModificacion + " " + nuevoInput;
+        }
+
+        if (sessionAttributes.instruccionesModificacion) {
+            console.log("EXISTE UN VALOR PARA sessionAttributes.instruccionesModificacion");
+            nuevoInput = sessionAttributes.instruccionesModificacion;
+        }
+
+        console.log("--nuevoInput tiene el siguiente valor antes de la llamada a ChatGPT para modificar: --", nuevoInput)
+
+        const chatGPTResponse = await llamadaAChatGPTParaModificarOrden(nuevoInput, ordenActual, menuData);
+
+        // Extraer el JSON de la respuesta de ChatGPT
+        const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT");
+        }
+
+        const orderInfo = JSON.parse(jsonMatch[0]);
+
+        // Actualizar las variables de sesión 
+        sessionAttributes.orden = orderInfo.orden;
+        sessionAttributes.totalUnidades = orderInfo.totalUnidades;
+        sessionAttributes.totalCosto = orderInfo.totalCosto;
+        sessionAttributes.comentariosOrden = orderInfo.comentarios;
+
+        console.log('/-/ Inicio de Limpieza de variables de sesión');
+
+        delete sessionAttributes.initialInput;
+        delete sessionAttributes.accionModificacion;
+        delete sessionAttributes.instruccionesModificacion;
+        delete sessionAttributes.esModificar;
+        delete sessionAttributes.esModificarPorSlot;
+        delete sessionAttributes.inputSlotSesion;
+
+        delete sessionAttributes.categoriaIdentificada;
+        delete sessionAttributes.numeroTotalAtributos;
+        delete sessionAttributes.atributosCapturados;
+        delete sessionAttributes.userInputOriginal;
+
+        // Limpiar variables del atributo actual
+        delete sessionAttributes.atributoActualNombre;
+        delete sessionAttributes.atributoActualValores;
+        delete sessionAttributes.atributoActualMensaje;
+        delete sessionAttributes.atributosRestantes;
+
+        // Limpiar atributos específicos capturados (usando un patrón)
+        Object.keys(sessionAttributes).forEach(key => {
+            if (key.startsWith('atributo_')) {
+                delete sessionAttributes[key];
+                console.log(`/-/ Eliminada variable de sesión: ${key}`);
+            }
+        });
+
+        console.log('/-/ Limpieza de variables de sesión completada');
+
+        console.log("Se han actualizado los atributos de sesión actuales para ordenar gracias a que se añadieron elementos:", JSON.stringify(sessionAttributes, null, 2));
+
+        // Construir los mensajes separados
+        let mensajes = [];
+
+        mensajes.push({
+            contentType: "PlainText",
+            content: "Listo, he modificado tu orden según tus indicaciones."
+        })
+
+        // Mensaje adicional preguntando si necesita más ayuda
+        mensajes.push({
+            contentType: "PlainText",
+            content: "¿Quieres añadir algo más o pasar a finalizar tu orden?"
+        });
+
+        // Retornar el resultado con los mensajes construidos
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Fulfilled"
+                },
+                sessionAttributes: sessionAttributes
+            },
+            messages: mensajes
+        };
+
+
+    } catch (error) {
+
+        console.error("Error al tratar de modificar la orden actual:", error);
+        return {
+            sessionState: {
+                dialogAction: {
+                    type: "Close"
+                },
+                intent: {
+                    name: event.sessionState.intent.name,
+                    state: "Failed"
+                }
+            },
+            messages: [
+                {
+                    contentType: "PlainText",
+                    content: "Lo siento, hubo un problema al tratar de modificar tu orden. Por favor, intenta de nuevo."
+                }
+            ]
+        };
+
+    }
 
 }
 
@@ -3900,6 +4463,60 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
 
 }
 
+async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuData) {
+
+    // Convertir precios del menú a números
+    const menuPreprocesado = menuData.map(item => ({
+        ...item,
+        Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
+    }));
+
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('llamadaAChatGPTParaModificarOrden');
+
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuPreprocesado, null, 2)}',
+        JSON.stringify(menuPreprocesado, null, 2));
+
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt
+        .replace('${ordenActual.orden}', ordenActual.orden)
+        .replace('${ordenActual.totalUnidades}', ordenActual.totalUnidades)
+        .replace('${ordenActual.totalCosto}', ordenActual.totalCosto)
+        .replace('${ordenActual.comentarios}', ordenActual.comentarios)
+        .replace('${userInput}', userInput);
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log("Respuesta de ChatGPT:");
+        console.log("--------------------------------------");
+        console.log(response.data.choices[0].message.content);
+        console.log("--------------------------------------");
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("Error al llamar a la API de ChatGPT:", error);
+        throw error;
+    }
+}
+
 async function verificarSiEsOrdenDirecta(userInput) {
 
     try {
@@ -3942,7 +4559,7 @@ async function verificarSiEsOrdenDirecta(userInput) {
         }
 
         const result = JSON.parse(jsonMatch[0]);
-        return result.isDirectOrder;
+        return result;
 
     } catch (error) {
         console.error("Error al verificar si es orden directa:", error);
@@ -4266,41 +4883,18 @@ async function analizarDepartamentoEnInput(userInput, costosDeEnvio) {
 
 async function analizarCategoriaYAtributos(userInput, menuData, categoriaMenuData) {
 
-    //const prompts = await getPrompts('analizarCategoriaYAtributos');
+    // Obtener los prompts desde Google Sheets
+    const prompts = await getPrompts('analizarCategoriaYAtributos');
 
-    const systemPrompt = `
-    Eres un asistente especializado en analizar pedidos de restaurante.
-    
-    Tienes acceso al siguiente menú:
-    ${JSON.stringify(menuData, null, 2)}
-    
-    Y a la siguiente información de categorías y atributos:
-    ${JSON.stringify(categoriaMenuData, null, 2)}
-    
-    Tu tarea es analizar el pedido del usuario y determinar:
-    1. La categoría exacta a la que pertenece el pedido
-    2. Contar cuántos atributos tiene esa categoría
-    3. Obtener los atributos y sus valores aceptables
-    4. Generar mensajes apropiados para solicitar cada atributo
-    `;
+    // Reemplazar variables en el system prompt si es necesario
+    const systemPrompt = prompts.systemPrompt
+        .replace('${JSON.stringify(menuData, null, 2)}',
+            JSON.stringify(menuData, null, 2))
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
 
-    const userPrompt = `
-    Analiza el siguiente pedido:
-    "${userInput}"
-    
-    Debes responder con un objeto JSON que contenga:
-    {
-        "categoria": "nombre de la categoría identificada",
-        "numeroAtributos": número de atributos encontrados para esta categoría,
-        "atributos": [
-            {
-                "nombre": "nombre del atributo",
-                "valoresAceptables": "valor1, valor2, valor3",
-                "mensajeSolicitud": "¿[Pregunta personalizada]? Las opciones son: [valores aceptables]"
-            }
-        ]
-    }
-    `;
+    // Reemplazar variables en el user prompt si es necesario
+    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
