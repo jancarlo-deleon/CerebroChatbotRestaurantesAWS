@@ -1835,6 +1835,177 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
         };
     }
 
+    if (!sessionAttributes.solicitudAnalizada) {
+        console.log("La solicitud aun NO HA SIDO ANALIZADA");
+
+        const ordenActual = sessionAttributes.orden;
+            
+
+        const analisisSolicitud = await analizarTipoSolicitud(userInput, ordenActual, menuData);
+        console.log('Análisis de solicitud:', analisisSolicitud);
+
+        sessionAttributes.solicitudAnalizada = true;
+        sessionAttributes.tipoSolicitud = analisisSolicitud.tipoSolicitud;
+        console.log("Tipo de solicitud identificada:", sessionAttributes.tipoSolicitud);
+        sessionAttributes.accion = analisisSolicitud.accion;
+        console.log("Accion identificada:", sessionAttributes.accion);
+        sessionAttributes.coincidenciasEnOrden = analisisSolicitud.coincidenciasEnOrden;
+        console.log("Coincidencias en la orden identificadas:", sessionAttributes.coincidenciasEnOrden);
+
+        if (analisisSolicitud.tipoSolicitud === "GENERAL") {
+            console.log("La solicitud es de tipo GENERAL");
+
+            // Primero separamos las coincidencias por coma y espacio
+            const coincidenciasSeparadas = analisisSolicitud.coincidenciasEnOrden.split(', ');
+
+            // Luego buscamos si alguna coincide con la orden
+            let resultadoBusqueda = false;
+            for (const coincidencia of coincidenciasSeparadas) {
+                if (ordenActual.includes(coincidencia)) {
+                    resultadoBusqueda = true;
+                    break;
+                }
+            }
+
+            if (resultadoBusqueda) {
+                console.log("Coincidencia encontrada:", resultadoBusqueda);
+            } else {
+                console.log("No se encontraron coincidencias.");
+            }
+
+
+            if (analisisSolicitud.coincidenciasEnOrden && resultadoBusqueda) {
+                console.log("EXISTE un valor para coincidenciasEnOrden");
+
+                const opcionesCoincidentes = analisisSolicitud.coincidenciasEnOrden.split(', ');
+                console.log("Valor de opcionesCoincidentes:", opcionesCoincidentes);
+                sessionAttributes.elementosDisponibles = JSON.stringify(opcionesCoincidentes);
+                console.log("Elementos dissponibles guardados en la variable de sesion:", sessionAttributes.elementosDisponibles);
+
+                // Para solicitudes de cambio, también guardar coincidencias del nuevo elemento
+                if (analisisSolicitud.accion === "CAMBIAR" && analisisSolicitud.coincidenciasParaElementoNuevo) {
+                    console.log("La accion es CAMBIAR y existe un valor para coincidenciasParaElementoNuevo");
+                    sessionAttributes.elementosNuevosDisponibles = analisisSolicitud.coincidenciasParaElementoNuevo;
+                    console.log("Elementos nuevos disponibles guardados en la variable de sesion:", sessionAttributes.elementosNuevosDisponibles);
+                }
+
+                // Mostrar opciones al usuario
+                const mensaje = analisisSolicitud.accion === "ELIMINAR" ?
+                    "¿Cuál de estos elementos deseas eliminar?\n También necesito que me indiques la cantidad a eliminar." :
+                    "¿Cuál de estos elementos deseas cambiar?\n";
+                console.log("COntenido del MENSAJE a mostrar al cliente:", mensaje);
+
+                const opcionesMensaje = opcionesCoincidentes.map((op, idx) => `${idx + 1}. ${op}`).join('\n');
+                console.log("Estas son las opciones que se listaran al usuario:", opcionesMensaje);
+
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "ElicitSlot",
+                            slotToElicit: "elementoSeleccionado"
+                        },
+                        intent: {
+                            name: "ModificarOrdenIntent",
+                            state: "InProgress"
+                        },
+                        sessionAttributes: sessionAttributes
+                    },
+                    messages: [{
+                        contentType: "PlainText",
+                        content: mensaje + opcionesMensaje
+                    }]
+                };
+
+            } else {
+                return {
+                    sessionState: {
+                        dialogAction: {
+                            type: "Close"
+                        },
+                        intent: {
+                            name: "ModificarOrdenIntent",
+                            state: "Failed"
+                        }
+                    },
+                    messages: [{
+                        contentType: "PlainText",
+                        content: "Lo siento, pero no puedo realizar lo que me indicas"
+                    }, {
+                        contentType: "PlainText",
+                        content: "No encontré elementos coincidentes en tu orden actual."
+                    }]
+                };
+            }
+
+
+
+        }
+
+    }
+
+    // Manejar la selección del elemento a modificar
+    if (sessionAttributes.tipoSolicitud === "GENERAL" &&
+        event.sessionState.intent.slots?.elementoSeleccionado?.value?.interpretedValue) {
+
+        console.log("La solicitud es de tipo GENERAL y se ha capturador el slot para elementoSeleccionado");
+
+        const elementoSeleccionado = event.sessionState.intent.slots.elementoSeleccionado.value.interpretedValue;
+        console.log("El valor de elementoSeleccionado es:", elementoSeleccionado);
+        sessionAttributes.elementoSeleccionado = elementoSeleccionado;
+        console.log("elementoSeleccionado guardado en la variable de sesion es:", sessionAttributes.elementoSeleccionado);
+
+        if (sessionAttributes.accion === "CAMBIAR" && !sessionAttributes.elementoNuevoSolicitado) {
+            console.log("la accion es CAMBIAR pero AUN NO se tiene elementoNuevoSolicitado como true");
+
+            sessionAttributes.elementoNuevoSolicitado = true;
+            const opcionesNuevas = sessionAttributes.elementosNuevosDisponibles.split(', ');
+            console.log("Contenido de opcionesNuevas:", opcionesNuevas);
+            const opcionesMensaje = opcionesNuevas.map((op, idx) => `${idx + 1}. ${op}`).join('\n');
+            console.log("contenido de OpcionesMensaje:", opcionesMensaje);
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "ElicitSlot",
+                        slotToElicit: "nuevoElemento"
+                    },
+                    intent: {
+                        name: "ModificarOrdenIntent",
+                        state: "InProgress"
+                    },
+                    sessionAttributes: sessionAttributes
+                },
+                messages: [{
+                    contentType: "PlainText",
+                    content: "¿Por cuál elemento deseas cambiarlo?"
+                },
+                {
+                    contentType: "PlainText",
+                    content: opcionesMensaje
+                }
+                ]
+            };
+        }
+    }
+
+    // Si se llega aquí, significa que tenemos toda la información necesaria
+    // Construir el input para la modificación
+    let inputModificacion;
+
+    if (sessionAttributes.tipoSolicitud === "GENERAL") {
+        if (sessionAttributes.accion === "ELIMINAR") {
+            console.log("La accion es ELIMINAR e inputModificacion sera para eliminar el elemento seleccionado");
+            inputModificacion = `eliminar ${sessionAttributes.elementoSeleccionado}`;
+        } else {
+            console.log("La accion es CAMBIAR e inputModificacion sera para cambiar el elemento seleccionado");
+            inputModificacion = `cambiar ${sessionAttributes.elementoSeleccionado} por ${event.sessionState.intent.slots.nuevoElemento.value.interpretedValue}`;
+        }
+    }
+
+    console.log("---||Valor de inputModificacion||----", inputModificacion);
+    console.log("---||Valor de userInput||----", userInput);
+
+
     // Obtener el input del usuario, ya sea del slot o del evento original
     let inputSlot = event.sessionState.intent.slots?.cambiarEnOrden?.value?.interpretedValue;
     console.log("Valor del Input capturado a partir del Slot: ", inputSlot);
@@ -1856,89 +2027,95 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
     console.log("++ Resultado de !(event.sessionState.intent.slots.atributosCapturados):", !(event.sessionState.intent.slotsatributosCapturados));
     console.log("++ Resultado de !(event.sessionState.intent.slots.cambiarEnOrden):", !(event.sessionState.intent.slots.cambiarEnOrden));
 
-    if (!(event.sessionState.intent.slots.atributosCapturados)) {
-        console.log("-- Si este flujo esta activo es porque AUN NO se esta capturando atributos usando atributosCapturados //");
+    isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
 
-        // Verificar si es una orden directa 
-        nuevoInput = inputSlot;
-        console.log("****Valor de nuevoInput en estos momentos: ", nuevoInput);
-        console.log("****");
+    if (inputModificacion) {
+        nuevoInput = inputModificacion;
+    } else {
 
-        isDirectOrder = await verificarSiEsOrdenDirecta(inputDirecto, menuData);
+        if (!(event.sessionState.intent.slots.atributosCapturados)) {
+            console.log("-- Si este flujo esta activo es porque AUN NO se esta capturando atributos usando atributosCapturados //");
 
-        console.log("Es orden directa para modificar algo a la orden? :", isDirectOrder.isDirectOrder);
+            // Verificar si es una orden directa 
+            nuevoInput = inputSlot;
+            console.log("****Valor de nuevoInput en estos momentos: ", nuevoInput);
+            console.log("****");
 
-        if (!(event.sessionState.intent.slots.cambiarEnOrden)) {
-            console.log("-- Si este flujo esta activo es porque se validara si es orden directa o no //");
 
-            if (!isDirectOrder.isDirectOrder && inputSlot == null) {
 
-                console.log("NO es considerado una orden directa")
+            console.log("Es orden directa para modificar algo a la orden? :", isDirectOrder.isDirectOrder);
 
-                nuevoInput = inputSlot;
-                console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
+            if (!(event.sessionState.intent.slots.cambiarEnOrden)) {
+                console.log("-- Si este flujo esta activo es porque se validara si es orden directa o no //");
 
-                if (isDirectOrder.isModificar) {
-                    console.log("Existe valor para isDirectOrder.isModificar!");
-                    if (!sessionAttributes.esModificarPorSlot) {
-                        sessionAttributes.esModificarPorSlot = isDirectOrder.isModificar;
-                        console.log("**/- Se han guardado las intrucciones para esModificarPorSlot:", sessionAttributes.esModificarPorSlot);
+                if (!isDirectOrder.isDirectOrder && inputSlot == null) {
+
+                    console.log("NO es considerado una orden directa")
+
+                    nuevoInput = inputSlot;
+                    console.log("Valor de NuevoInput obtenido de inputSlot: ", nuevoInput);
+
+                    if (isDirectOrder.isModificar) {
+                        console.log("Existe valor para isDirectOrder.isModificar!");
+                        if (!sessionAttributes.esModificarPorSlot) {
+                            sessionAttributes.esModificarPorSlot = isDirectOrder.isModificar;
+                            console.log("**/- Se han guardado las intrucciones para esModificarPorSlot:", sessionAttributes.esModificarPorSlot);
+                        }
                     }
-                }
 
 
-                // Preparar los mensajes base
-                let mensajes = [];
+                    // Preparar los mensajes base
+                    let mensajes = [];
 
-                if (isDirectOrder.isEliminar) {
-                    sessionAttributes.accionModificacion = "quiero eliminar";
-                    console.log("--Valor de sessionAttributes.accionModificacion : ", sessionAttributes.accionModificacion);
+                    if (isDirectOrder.isEliminar) {
+                        sessionAttributes.accionModificacion = "quiero eliminar";
+                        console.log("--Valor de sessionAttributes.accionModificacion : ", sessionAttributes.accionModificacion);
 
-                    // Agregar mensaje inicial
-                    mensajes.push({
-                        contentType: "PlainText",
-                        content: "Muy bien, ¿qué te gustaria remover de tu pedido?"
-                    });
+                        // Agregar mensaje inicial
+                        mensajes.push({
+                            contentType: "PlainText",
+                            content: "Muy bien, ¿qué te gustaria remover de tu pedido?"
+                        });
+                    } else {
+
+                        sessionAttributes.accionModificacion = "quiero cambiar";
+                        console.log("--Valor de sessionAttributes.accionModificacion : ", sessionAttributes.accionModificacion);
+
+                        // Agregar mensaje inicial
+                        mensajes.push({
+                            contentType: "PlainText",
+                            content: "Muy bien, ¿qué te gustaria cambiar de tu pedido?"
+                        });
+                    }
+
+                    return {
+                        sessionState: {
+                            dialogAction: {
+                                type: "ElicitSlot",
+                                slotToElicit: "cambiarEnOrden"
+                            },
+                            intent: {
+                                name: event.sessionState.intent.name,
+                                state: "InProgress"
+                            },
+                            sessionAttributes: sessionAttributes
+                        },
+                        messages: mensajes
+                    };
+
                 } else {
+                    nuevoInput = inputDirecto;
 
-                    sessionAttributes.accionModificacion = "quiero cambiar";
-                    console.log("--Valor de sessionAttributes.accionModificacion : ", sessionAttributes.accionModificacion);
+                    // Guardar instrucciones modificacion si no existen
+                    if (!sessionAttributes.instruccionesModificacion && nuevoInput) {
+                        sessionAttributes.instruccionesModificacion = nuevoInput;
+                        console.log("**/- Se han guardado las intrucciones para la modificacion:", sessionAttributes.instruccionesModificacion);
+                    }
 
-                    // Agregar mensaje inicial
-                    mensajes.push({
-                        contentType: "PlainText",
-                        content: "Muy bien, ¿qué te gustaria cambiar de tu pedido?"
-                    });
                 }
-
-                return {
-                    sessionState: {
-                        dialogAction: {
-                            type: "ElicitSlot",
-                            slotToElicit: "cambiarEnOrden"
-                        },
-                        intent: {
-                            name: event.sessionState.intent.name,
-                            state: "InProgress"
-                        },
-                        sessionAttributes: sessionAttributes
-                    },
-                    messages: mensajes
-                };
-
-            } else {
-                nuevoInput = inputDirecto;
-
-                // Guardar instrucciones modificacion si no existen
-                if (!sessionAttributes.instruccionesModificacion && nuevoInput) {
-                    sessionAttributes.instruccionesModificacion = nuevoInput;
-                    console.log("**/- Se han guardado las intrucciones para la modificacion:", sessionAttributes.instruccionesModificacion);
-                }
-
             }
+
         }
-
-
     }
 
 
@@ -1954,7 +2131,12 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
         console.log("**/- Se han guardado las intrucciones para esModificar:", sessionAttributes.esModificar);
     }
 
-    if (sessionAttributes.esModificar || sessionAttributes.esModificarPorSlot) {
+    if (inputModificacion && sessionAttributes.accion === "CAMBIAR" && !sessionAttributes.esModificarPorInputModificacion) {
+        sessionAttributes.esModificarPorInputModificacion = true;
+        console.log("**/- Se han guardado las intrucciones para esModificarPorInputModificacion:", sessionAttributes.esModificarPorInputModificacion);
+    }
+
+    if (sessionAttributes.esModificar || sessionAttributes.esModificarPorSlot || sessionAttributes.esModificarPorInputModificacion) {
 
 
         console.log("Valor de sessionAttributes.instruccionesModificacion:", sessionAttributes.instruccionesModificacion);
@@ -2200,6 +2382,33 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
             nuevoInput = sessionAttributes.instruccionesModificacion;
         }
 
+        console.log("Antes que nada, se verificara si hay coincidencias en la orden");
+        console.log("Existen coincidencias en la orden?",sessionAttributes.coincidenciasEnOrden);
+        if (!sessionAttributes.coincidenciasEnOrden) {
+
+            console.log("++++ NO SE PUEDE PROCESAR LA ORDEN YA QUE NO EXISTEN COINCIDENCIAS ++++")
+
+            return {
+                sessionState: {
+                    dialogAction: {
+                        type: "Close"
+                    },
+                    intent: {
+                        name: "ModificarOrdenIntent",
+                        state: "Failed"
+                    }
+                },
+                messages: [{
+                    contentType: "PlainText",
+                    content: "Lo siento, pero no puedo realizar lo que me indicas"
+                }, {
+                    contentType: "PlainText",
+                    content: "No encontré elementos coincidentes en tu orden actual."
+                }]
+            };
+            
+        }
+
         console.log("--nuevoInput tiene el siguiente valor antes de la llamada a ChatGPT para modificar: --", nuevoInput)
 
         const chatGPTResponse = await llamadaAChatGPTParaModificarOrden(nuevoInput, ordenActual, menuData);
@@ -2226,6 +2435,16 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
         delete sessionAttributes.esModificar;
         delete sessionAttributes.esModificarPorSlot;
         delete sessionAttributes.inputSlotSesion;
+        delete sessionAttributes.esModificarPorInputModificacion;
+        delete sessionAttributes.coincidenciasEnOrden;
+
+        delete sessionAttributes.solicitudAnalizada;
+        delete sessionAttributes.tipoSolicitud;
+        delete sessionAttributes.accion;
+        delete sessionAttributes.elementosDisponibles;
+        delete sessionAttributes.elementosNuevosDisponibles;
+        delete sessionAttributes.elementoSeleccionado;
+        delete sessionAttributes.elementoNuevoSolicitado;
 
         delete sessionAttributes.categoriaIdentificada;
         delete sessionAttributes.numeroTotalAtributos;
@@ -4931,6 +5150,56 @@ async function analizarCategoriaYAtributos(userInput, menuData, categoriaMenuDat
 
     } catch (error) {
         console.error("Error al analizar categoría y atributos:", error);
+        throw error;
+    }
+}
+
+async function analizarTipoSolicitud(userInput, ordenActual, menuData) {
+
+    const prompts = await getPrompts('analizarTipoSolicitud');
+
+    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuData, null, 2)}',
+        JSON.stringify(menuData, null, 2))
+        .replace('${ordenActual}', ordenActual);
+
+    const userPrompt = prompts.userPrompt
+        .replace('${userInput}', userInput);
+
+    try {
+        const response = await axios.post(OPENAI_API_URL, {
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: userPrompt
+                }
+            ],
+            temperature: 0.3
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        console.log("---Valor de la respuesta para analizar tipo solicitud apoyandose de ChatGPT ---");
+        console.log(contenido);
+        console.log("--------------------------------------------------------------------------------------");
+
+        return JSON.parse(contenido);
+
+    } catch (error) {
+        console.error("Error al analizar tipo solicitud:", error);
         throw error;
     }
 }
