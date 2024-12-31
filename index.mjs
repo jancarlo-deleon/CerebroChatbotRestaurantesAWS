@@ -772,6 +772,9 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Obtener datos actualizados del menú
         const menuData = await getMenu();
 
+        const categoriaMenuData = await getCategoriaMenu();
+        console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
+
 
         // Verificar si estamos esperando una selección específica
         if (sessionAttributes.esperandoSeleccionCategoria) {
@@ -1017,9 +1020,6 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             console.log('=== Inicio del proceso de captura de atributos ===');
             console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
 
-            const categoriaMenuData = await getCategoriaMenu();
-            console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
-
             console.log('/-/ Procesando categoría y atributos para input:', userInput);
             const categoriaInfo = await analizarCategoriaYAtributos(userInput, menuData, categoriaMenuData);
             console.log('/-/ Información de categoría procesada:', categoriaInfo);
@@ -1153,7 +1153,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         // Continuar con el procesamiento de la orden
         console.log(" || Se procederá a utilizar ChatGPT para empezar con el proceso de toma de orden");
         console.log(" || Este es el userInput que se estara procesando con llamadaAChatGPTParaOrdenar: ", userInput);
-        let ordenarGPT = await llamadaAChatGPTParaOrdenar(userInput, menuData);
+        let ordenarGPT = await llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
         const jsonMatch = ordenarGPT.match(/\{[\s\S]*\}/);
@@ -1263,6 +1263,9 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
     // Obtener datos actualizados del menú
     const menuData = await getMenu();
+
+    const categoriaMenuData = await getCategoriaMenu();
+    console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
 
     // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
     const tieneOrdenActiva = sessionAttributes.orden &&
@@ -1507,9 +1510,6 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         console.log('=== Inicio del proceso de captura de atributos ===');
         console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
 
-        const categoriaMenuData = await getCategoriaMenu();
-        console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
-
         console.log('/-/ Procesando categoría y atributos para input:', nuevoInput);
         const categoriaInfo = await analizarCategoriaYAtributos(nuevoInput, menuData, categoriaMenuData);
         console.log('/-/ Información de categoría procesada:', categoriaInfo);
@@ -1653,7 +1653,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
 
         console.log("--nuevoInput tiene el siguiente valor antes de la llamada a ChatGPT para añadir: --", nuevoInput)
 
-        const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual, menuData);
+        const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual, menuData, categoriaMenuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
         const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
@@ -1768,6 +1768,9 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
     // Obtener datos actualizados del menú
     const menuData = await getMenu();
 
+    const categoriaMenuData = await getCategoriaMenu();
+    console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
+
     // Verificar si existe una orden activa chequeando todas las variables de sesión relevantes
     const tieneOrdenActiva = sessionAttributes.orden &&
         sessionAttributes.totalUnidades !== undefined &&
@@ -1839,7 +1842,7 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
         console.log("La solicitud aun NO HA SIDO ANALIZADA");
 
         const ordenActual = sessionAttributes.orden;
-            
+
 
         const analisisSolicitud = await analizarTipoSolicitud(userInput, ordenActual, menuData);
         console.log('Análisis de solicitud:', analisisSolicitud);
@@ -2221,9 +2224,6 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
             console.log('=== Inicio del proceso de captura de atributos ===');
             console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
 
-            const categoriaMenuData = await getCategoriaMenu();
-            console.log('/-/ Datos de categoría obtenidos:', categoriaMenuData);
-
             console.log('/-/ Procesando categoría y atributos para input:', nuevoInput);
             const categoriaInfo = await analizarCategoriaYAtributos(nuevoInput, menuData, categoriaMenuData);
             console.log('/-/ Información de categoría procesada:', categoriaInfo);
@@ -2383,7 +2383,7 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
         }
 
         console.log("Antes que nada, se verificara si hay coincidencias en la orden");
-        console.log("Existen coincidencias en la orden?",sessionAttributes.coincidenciasEnOrden);
+        console.log("Existen coincidencias en la orden?", sessionAttributes.coincidenciasEnOrden);
         if (!sessionAttributes.coincidenciasEnOrden) {
 
             console.log("++++ NO SE PUEDE PROCESAR LA ORDEN YA QUE NO EXISTEN COINCIDENCIAS ++++")
@@ -2406,12 +2406,12 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
                     content: "No encontré elementos coincidentes en tu orden actual."
                 }]
             };
-            
+
         }
 
         console.log("--nuevoInput tiene el siguiente valor antes de la llamada a ChatGPT para modificar: --", nuevoInput)
 
-        const chatGPTResponse = await llamadaAChatGPTParaModificarOrden(nuevoInput, ordenActual, menuData);
+        const chatGPTResponse = await llamadaAChatGPTParaModificarOrden(nuevoInput, ordenActual, menuData, categoriaMenuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
         const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
@@ -4568,7 +4568,7 @@ async function generarMensajeMetodosDeEnvio(userInput) {
     }
 }
 
-async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
+async function llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData) {
 
     // Convertir precios del menú a números
     const menuPreprocesado = menuData.map(item => ({
@@ -4580,11 +4580,17 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
     const prompts = await getPrompts('llamadaAChatGPTParaOrdenar');
 
     // Reemplazar variables en el system prompt si es necesario
-    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuPreprocesado, null, 2)}',
-        JSON.stringify(menuPreprocesado, null, 2));
+    const systemPrompt = prompts.systemPrompt
+        .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
+            JSON.stringify(menuPreprocesado, null, 2))
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
 
     // Reemplazar variables en el user prompt si es necesario
-    const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
+    const userPrompt = prompts.userPrompt
+        .replace('${userInput}', userInput)
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -4618,7 +4624,7 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData) {
     }
 }
 
-async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData) {
+async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData, categoriaMenuData) {
 
     // Convertir precios del menú a números
     const menuPreprocesado = menuData.map(item => ({
@@ -4632,7 +4638,9 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
     // Reemplazar variables en el system prompt
     const systemPrompt = prompts.systemPrompt
         .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
-            JSON.stringify(menuPreprocesado, null, 2));
+            JSON.stringify(menuPreprocesado, null, 2))
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
 
     // Reemplazar variables en el user prompt
     const userPrompt = prompts.userPrompt
@@ -4640,7 +4648,9 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
         .replace('${ordenActual.totalUnidades}', ordenActual.totalUnidades)
         .replace('${ordenActual.totalCosto}', ordenActual.totalCosto)
         .replace('${ordenActual.comentarios}', ordenActual.comentarios)
-        .replace('${userInput}', userInput);
+        .replace('${userInput}', userInput)
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -4682,7 +4692,7 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
 
 }
 
-async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuData) {
+async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuData, categoriaMenuData) {
 
     // Convertir precios del menú a números
     const menuPreprocesado = menuData.map(item => ({
@@ -4694,8 +4704,11 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
     const prompts = await getPrompts('llamadaAChatGPTParaModificarOrden');
 
     // Reemplazar variables en el system prompt si es necesario
-    const systemPrompt = prompts.systemPrompt.replace('${JSON.stringify(menuPreprocesado, null, 2)}',
-        JSON.stringify(menuPreprocesado, null, 2));
+    const systemPrompt = prompts.systemPrompt
+        .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
+            JSON.stringify(menuPreprocesado, null, 2))
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
 
     // Reemplazar variables en el user prompt si es necesario
     const userPrompt = prompts.userPrompt
@@ -4703,7 +4716,9 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
         .replace('${ordenActual.totalUnidades}', ordenActual.totalUnidades)
         .replace('${ordenActual.totalCosto}', ordenActual.totalCosto)
         .replace('${ordenActual.comentarios}', ordenActual.comentarios)
-        .replace('${userInput}', userInput);
+        .replace('${userInput}', userInput)
+        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
+            JSON.stringify(categoriaMenuData, null, 2));
     try {
         const response = await axios.post(OPENAI_API_URL, {
             model: "gpt-4o-mini",
