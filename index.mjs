@@ -1015,29 +1015,65 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
         // Después de verificar datos del cliente y antes de procesar la orden
 
-        // Obtener información de categorías si aún no la tenemos
-        if (!sessionAttributes.categoriaIdentificada) {
+        if (!sessionAttributes.elementosPendientes) {
             console.log('=== Inicio del proceso de captura de atributos ===');
-            console.log('/-/ No hay información de categoría, procediendo a obtenerla...');
+            console.log('/-/ No hay información de elementos, procediendo a obtenerla...');
 
             console.log('/-/ Procesando categoría y atributos para input:', userInput);
-            const categoriaInfo = await analizarCategoriaYAtributos(userInput, menuData, categoriaMenuData);
-            console.log('/-/ Información de categoría procesada:', categoriaInfo);
+            const analisisElementos = await analizarCategoriaYAtributos(userInput, menuData, categoriaMenuData);
 
-            // Guardar información básica
-            sessionAttributes.categoriaIdentificada = categoriaInfo.categoria;
-            sessionAttributes.numeroTotalAtributos = categoriaInfo.numeroAtributos;
-            sessionAttributes.atributosCapturados = 0;
-            sessionAttributes.userInputOriginal = userInput; // Guardar input original
+            // Expandir elementos según cantidad
+            const elementosExpandidos = [];
+            analisisElementos.elementos.forEach(elemento => {
+                for (let i = 0; i < elemento.cantidad; i++) {
+                    elementosExpandidos.push({
+                        ...elemento,
+                        cantidad: 1,
+                        unidadNumero: i + 1,
+                        totalUnidades: elemento.cantidad
+                    });
+                }
+            });
 
-            // Guardar información del primer atributo
-            if (categoriaInfo.atributos && categoriaInfo.atributos.length > 0) {
-                const primerAtributo = categoriaInfo.atributos[0];
+            console.log('/-/ Contenido de elementosExpandidos:', elementosExpandidos);
+
+            // Convertir elementos expandidos a string
+            sessionAttributes.elementosPendientes = JSON.stringify(elementosExpandidos);
+            sessionAttributes.elementoActualIndex = '0';
+            sessionAttributes.totalElementos = elementosExpandidos.length.toString();
+            sessionAttributes.userInputOriginal = userInput;
+
+            console.log('/-/ Elementos pendientes inicializados:', sessionAttributes.elementosPendientes);
+        }
+
+        // Verificar si hay elemento actual en proceso
+        if (!sessionAttributes.elementoActual && sessionAttributes.elementosPendientes) {
+            console.log("Valor de elementoActualIndex:", parseInt(sessionAttributes.elementoActualIndex));
+
+            const elementosArray = JSON.parse(sessionAttributes.elementosPendientes);
+            console.log("Valor de elementosArray:", elementosArray);
+            const elementoActual = elementosArray[parseInt(sessionAttributes.elementoActualIndex)];
+            console.log("Valor de elementoActual:", elementoActual);
+
+            sessionAttributes.elementoActual = JSON.stringify(elementoActual);
+            sessionAttributes.categoriaIdentificada = elementoActual.categoria;
+            sessionAttributes.numeroTotalAtributos = elementoActual.atributos.length.toString();
+            sessionAttributes.atributosCapturados = '0';
+
+            if (elementoActual.atributos && elementoActual.atributos.length > 0) {
+                const primerAtributo = elementoActual.atributos[0];
                 sessionAttributes.atributoActualNombre = primerAtributo.nombre;
                 sessionAttributes.atributoActualValores = primerAtributo.valoresAceptables;
+
+                // Mensaje personalizado según unidad actual
+                const mensajeElemento = elementoActual.totalUnidades > 1 ?
+                    `Para ${elementoActual.nombre} ${elementoActual.unidadNumero} de ${elementoActual.totalUnidades}:` :
+                    `Para ${elementoActual.nombre}:`;
+
+                sessionAttributes.atributoActualMensajeElementoActual = mensajeElemento;
+
                 sessionAttributes.atributoActualMensaje = primerAtributo.mensajeSolicitud;
-                // Guardar todos los atributos como string JSON para recuperarlos después
-                sessionAttributes.atributosRestantes = JSON.stringify(categoriaInfo.atributos.slice(1));
+                sessionAttributes.atributosRestantes = JSON.stringify(elementoActual.atributos.slice(1));
             }
 
             console.log('/-/ Categoría identificada:', sessionAttributes.categoriaIdentificada);
@@ -1049,7 +1085,10 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
             console.log('/-/ Atributos Restantes:', sessionAttributes.atributosRestantes);
             console.log("---------------------------------------");
             console.log('/-/ Inicializado contador de atributos capturados:', sessionAttributes.atributosCapturados);
+
+            console.log('/-/ Elemento actual configurado:', sessionAttributes.elementoActual);
         }
+
 
         // Verificar si el slot tiene valor
         const slotAtributo = event.sessionState.intent.slots?.atributosCapturados?.value?.interpretedValue;
@@ -1077,6 +1116,10 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                     messages: [
                         {
                             contentType: "PlainText",
+                            content: sessionAttributes.atributoActualMensajeElementoActual
+                        },
+                        {
+                            contentType: "PlainText",
                             content: sessionAttributes.atributoActualMensaje
                         }
                     ]
@@ -1085,18 +1128,23 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
             // Guardar el valor capturado con categoría incluida
             console.log("/-/ Aqui empieza el proceso de guardar una variable de sesion acorde al atributo capturado");
-            const atributoKey = `atributo_${sessionAttributes.atributoActualNombre.toLowerCase()}_${sessionAttributes.categoriaIdentificada.toLowerCase()}`;
+            const elementoActual = JSON.parse(sessionAttributes.elementoActual);
+            const atributoKey = `atributo_${sessionAttributes.elementoActualIndex}_${sessionAttributes.atributoActualNombre}`;
             sessionAttributes[atributoKey] = slotAtributo;
+
             console.log(`/-/ Guardado valor "${slotAtributo}" para ${atributoKey}`);
+
+            sessionAttributes.atributosCapturados = (sessionAttributes.atributosCapturados + 1).toString();
+            console.log('/-/ Incrementado contador de atributos a:', sessionAttributes.atributosCapturados);
 
 
             // Actualizar userInput con el nuevo atributo
-            userInput = sessionAttributes.userInputOriginal + " " + slotAtributo;
-            sessionAttributes.userInputOriginal = userInput;
+            if (!sessionAttributes.inputAcumulado) {
+                sessionAttributes.inputAcumulado = sessionAttributes.userInputOriginal;
+            }
+            sessionAttributes.inputAcumulado += ` ${elementoActual.nombre}_${sessionAttributes.atributoActualNombre}:${slotAtributo}`;
+            userInput = sessionAttributes.inputAcumulado;
             console.log('/-/ UserInput actualizado:', userInput);
-
-            sessionAttributes.atributosCapturados++;
-            console.log('/-/ Incrementado contador de atributos a:', sessionAttributes.atributosCapturados);
 
             // Preparar siguiente atributo si existe
             if (sessionAttributes.atributosRestantes) {
@@ -1109,6 +1157,13 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                     const siguienteAtributo = atributosRestantes[0];
                     sessionAttributes.atributoActualNombre = siguienteAtributo.nombre;
                     sessionAttributes.atributoActualValores = siguienteAtributo.valoresAceptables;
+
+                    // Mensaje personalizado según unidad actual
+                    const mensajeElemento = elementoActual.totalUnidades > 1 ?
+                        `Para ${elementoActual.nombre} ${elementoActual.unidadNumero} de ${elementoActual.totalUnidades}:` :
+                        `Para ${elementoActual.nombre}:`;
+                    sessionAttributes.atributoActualMensajeElementoActual = mensajeElemento;
+
                     sessionAttributes.atributoActualMensaje = siguienteAtributo.mensajeSolicitud;
                     sessionAttributes.atributosRestantes = JSON.stringify(atributosRestantes.slice(1));
                     console.log('/-/ Nuevo atributo actual configurado:', siguienteAtributo);
@@ -1135,6 +1190,10 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
                         messages: [
                             {
                                 contentType: "PlainText",
+                                content: sessionAttributes.atributoActualMensajeElementoActual
+                            },
+                            {
+                                contentType: "PlainText",
                                 content: sessionAttributes.atributoActualMensaje
                             }
                         ]
@@ -1142,8 +1201,83 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
 
 
                 } else {
-                    delete sessionAttributes.atributosRestantes;
-                    console.log('/-/ No hay más atributos restantes');
+                    console.log("/-/ Se preparará el siguiente elemento");
+                    // Elemento completado, preparar siguiente
+                    const elementosArray = JSON.parse(sessionAttributes.elementosPendientes);
+                    console.log("/-/ Valor de elementosArray del siguiente elemento:", elementosArray);
+                    elementosArray.shift();
+                    console.log("/-/ Despues de aplicarle shift:", elementosArray);
+
+                    if (elementosArray.length > 0) {
+                        console.log("/-/ hay elementos en elementosArray");
+
+                        // Actualizar elementos pendientes y contador
+                        sessionAttributes.elementosPendientes = JSON.stringify(elementosArray);
+                        console.log("/-/ Nuevo valor de elementosPendientes:", sessionAttributes.elementosPendientes);
+                        sessionAttributes.elementoActualIndex = (parseInt(sessionAttributes.elementoActualIndex) + 1).toString();
+                        console.log("/-/ Nuevo valor de elementoActualIndex:", sessionAttributes.elementoActualIndex);
+
+                        // Obtener información del siguiente elemento
+                        const siguienteElemento = elementosArray[0];
+                        console.log("/-/ Siguiente elemento a procesar:", siguienteElemento);
+
+                        // Configurar atributos del siguiente elemento
+                        sessionAttributes.elementoActual = JSON.stringify(siguienteElemento);
+                        sessionAttributes.categoriaIdentificada = siguienteElemento.categoria;
+                        sessionAttributes.numeroTotalAtributos = siguienteElemento.atributos.length.toString();
+                        sessionAttributes.atributosCapturados = '0';
+
+                        // Configurar primer atributo del siguiente elemento
+                        const primerAtributo = siguienteElemento.atributos[0];
+                        sessionAttributes.atributoActualNombre = primerAtributo.nombre;
+                        sessionAttributes.atributoActualValores = primerAtributo.valoresAceptables;
+
+                        // Mensaje personalizado según unidad actual
+                        const mensajeElementoSiguiente = siguienteElemento.totalUnidades > 1 ?
+                            `Para ${siguienteElemento.nombre} ${siguienteElemento.unidadNumero} de ${siguienteElemento.totalUnidades}:` :
+                            `Para ${siguienteElemento.nombre}:`;
+
+                        sessionAttributes.atributoActualMensajeElementoActual = mensajeElementoSiguiente;
+                        sessionAttributes.atributoActualMensaje = primerAtributo.mensajeSolicitud;
+                        sessionAttributes.atributosRestantes = JSON.stringify(siguienteElemento.atributos.slice(1));
+
+                        console.log('/-/ Pasando al siguiente elemento:', sessionAttributes.elementoActualIndex);
+                        console.log('/-/ Mensaje elemento actual:', sessionAttributes.atributoActualMensajeElementoActual);
+                        console.log('/-/ Mensaje atributo:', sessionAttributes.atributoActualMensaje);
+
+                        return {
+                            sessionState: {
+                                dialogAction: {
+                                    type: "ElicitSlot",
+                                    slotToElicit: "atributosCapturados"
+                                },
+                                intent: {
+                                    name: event.sessionState.intent.name,
+                                    state: "InProgress",
+                                    slots: {
+                                        ...event.sessionState.intent.slots,
+                                        atributosCapturados: null
+                                    }
+                                },
+                                sessionAttributes: sessionAttributes
+                            },
+                            messages: [
+                                {
+                                    contentType: "PlainText",
+                                    content: sessionAttributes.atributoActualMensajeElementoActual
+                                },
+                                {
+                                    contentType: "PlainText",
+                                    content: sessionAttributes.atributoActualMensaje
+                                }
+                            ]
+                        };
+
+
+                    } else {
+                        console.log('/-/ Proceso de captura de atributos completado');
+                        delete sessionAttributes.elementosPendientes;
+                    }
                 }
 
             }
@@ -1179,6 +1313,11 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         delete sessionAttributes.numeroTotalAtributos;
         delete sessionAttributes.atributosCapturados;
         delete sessionAttributes.userInputOriginal;
+        delete sessionAttributes.elementosPendientes;
+        delete sessionAttributes.elementoActualIndex;
+        delete sessionAttributes.inputAcumulado;
+        delete sessionAttributes.atributoActualMensajeElementoActual;
+        delete sessionAttributes.elementoActual;
 
         // Limpiar variables del atributo actual
         delete sessionAttributes.atributoActualNombre;
@@ -1894,7 +2033,7 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
 
                 // Mostrar opciones al usuario
                 const mensaje = analisisSolicitud.accion === "ELIMINAR" ?
-                    "¿Cuál de estos elementos deseas eliminar?\n También necesito que me indiques la cantidad a eliminar." :
+                    "¿Cuál de estos elementos deseas eliminar?\n También necesito que me indiques la cantidad de unidades a remover." :
                     "¿Cuál de estos elementos deseas cambiar?\n";
                 console.log("COntenido del MENSAJE a mostrar al cliente:", mensaje);
 
@@ -5120,15 +5259,49 @@ async function analizarCategoriaYAtributos(userInput, menuData, categoriaMenuDat
     // Obtener los prompts desde Google Sheets
     const prompts = await getPrompts('analizarCategoriaYAtributos');
 
-    // Reemplazar variables en el system prompt si es necesario
+    /*
     const systemPrompt = prompts.systemPrompt
         .replace('${JSON.stringify(menuData, null, 2)}',
             JSON.stringify(menuData, null, 2))
         .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
             JSON.stringify(categoriaMenuData, null, 2));
 
-    // Reemplazar variables en el user prompt si es necesario
     const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
+    */
+
+    const systemPrompt = `
+Eres un asistente especializado en analizar pedidos de restaurante.
+
+Tienes acceso al siguiente menú:
+${JSON.stringify(menuData, null, 2)}
+
+Y a la siguiente información de categorías y atributos:
+${JSON.stringify(categoriaMenuData, null, 2)}
+
+Tu tarea es analizar el pedido e identificar cada elemento individual, incluyendo cantidades.
+`;
+
+    const userPrompt = `
+Analiza el siguiente pedido:
+"${userInput}"
+
+Responde con un JSON que contenga:
+{
+    "elementos": [
+        {
+            "nombre": "nombre del item del menú",
+            "cantidad": número de unidades ordenadas,
+            "categoria": "categoría del item",
+            "atributos": [
+                {
+                    "nombre": "nombre del atributo",
+                    "valoresAceptables": "valor1, valor2, valor3",
+                    "mensajeSolicitud": "¿[Pregunta personalizada]? Las opciones son: [valores aceptables]"
+                }
+            ]
+        }
+    ]
+}`;
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
