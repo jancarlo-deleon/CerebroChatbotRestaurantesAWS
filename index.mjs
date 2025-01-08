@@ -1290,12 +1290,7 @@ async function handleOrdenarIntent(event, sessionAttributes, userInput) {
         let ordenarGPT = await llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
-        const jsonMatch = ordenarGPT.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT");
-        }
-
-        const orderInfo = JSON.parse(jsonMatch[0]);
+        const orderInfo = ordenarGPT;
 
         // Guardar la información en las variables de sesión
         sessionAttributes.orden = orderInfo.orden;
@@ -1739,7 +1734,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
                         slotToElicit: "atributosCapturados"
                     },
                     intent: {
-                        name: event.sessionState.intent.name,
+                        name: "AgregarAOrdenIntent",
                         state: "InProgress",
                         slots: event.sessionState.intent.slots
                     },
@@ -1810,7 +1805,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
                             slotToElicit: "atributosCapturados"
                         },
                         intent: {
-                            name: event.sessionState.intent.name,
+                            name: "AgregarAOrdenIntent",
                             state: "InProgress",
                             slots: {
                                 ...event.sessionState.intent.slots,
@@ -1883,7 +1878,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
                                 slotToElicit: "atributosCapturados"
                             },
                             intent: {
-                                name: event.sessionState.intent.name,
+                                name: "AgregarAOrdenIntent",
                                 state: "InProgress",
                                 slots: {
                                     ...event.sessionState.intent.slots,
@@ -1931,12 +1926,7 @@ async function handleAgregarAOrdenIntent(event, sessionAttributes, intentInfo, u
         const chatGPTResponse = await llamadaAChatGPTParaAgregarAOrden(nuevoInput, ordenActual, menuData, categoriaMenuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
-        const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT");
-        }
-
-        const orderInfo = JSON.parse(jsonMatch[0]);
+        const orderInfo = chatGPTResponse;
 
         // Actualizar las variables de sesión 
         sessionAttributes.orden = orderInfo.orden;
@@ -2830,12 +2820,7 @@ async function handleModificarOrdenIntent(event, sessionAttributes) {
         const chatGPTResponse = await llamadaAChatGPTParaModificarOrden(nuevoInput, ordenActual, menuData, categoriaMenuData);
 
         // Extraer el JSON de la respuesta de ChatGPT
-        const jsonMatch = chatGPTResponse.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No se pudo extraer JSON válido de la respuesta de ChatGPT");
-        }
-
-        const orderInfo = JSON.parse(jsonMatch[0]);
+        const orderInfo = chatGPTResponse;
 
         // Actualizar las variables de sesión 
         sessionAttributes.orden = orderInfo.orden;
@@ -4448,7 +4433,7 @@ async function getInicio() {
     }
 }
 
-export async function getMenu() {
+async function getMenu() {
     console.log("Iniciando consulta a la hoja 'MENU'");
 
     try {
@@ -4462,7 +4447,7 @@ export async function getMenu() {
     }
 }
 
-export async function getImagenes() {
+async function getImagenes() {
     console.log("Iniciando consulta a la hoja 'IMAGENES'");
 
     try {
@@ -4480,7 +4465,7 @@ export async function getImagenes() {
     }
 }
 
-export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elementos, direccion, metodoPago, totalCosto, estado, observaciones) {
+async function registrarOrden(noOrden, fechaHora, cliente, telefono, elementos, direccion, metodoPago, totalCosto, estado, observaciones) {
     console.log("Iniciando registro de nueva orden en la hoja 'ORDENES'");
 
     const nuevaOrden = {
@@ -4509,7 +4494,7 @@ export async function registrarOrden(noOrden, fechaHora, cliente, telefono, elem
     }
 }
 
-export async function registrarCliente(codigo, nombre, telefono, direccion) {
+async function registrarCliente(codigo, nombre, telefono, direccion) {
     console.log("Iniciando registro de nueva orden en la hoja 'CLIENTES'");
 
     const nuevoCliente = {
@@ -4998,6 +4983,12 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData
         Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
     }));
 
+    // Convertir precios del menú a números
+    const categoriaMenuDataPreprocesado = categoriaMenuData.map(item => ({
+        ...item,
+        'Precio Extra': parseFloat(item['Precio Extra'].replace('$', '')) // Eliminar "$" y convertir a número
+    }));
+
     // Obtener los prompts desde Google Sheets
     const prompts = await getPrompts('llamadaAChatGPTParaOrdenar');
 
@@ -5005,18 +4996,18 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData
     const systemPrompt = prompts.systemPrompt
         .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
             JSON.stringify(menuPreprocesado, null, 2))
-        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
-            JSON.stringify(categoriaMenuData, null, 2));
+        .replace('${JSON.stringify(categoriaMenuDataPreprocesado, null, 2)}',
+            JSON.stringify(categoriaMenuDataPreprocesado, null, 2));
 
     // Reemplazar variables en el user prompt si es necesario
     const userPrompt = prompts.userPrompt
         .replace('${userInput}', userInput)
-        .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
-            JSON.stringify(categoriaMenuData, null, 2));
+        .replace('${JSON.stringify(categoriaMenuDataPreprocesado, null, 2)}',
+            JSON.stringify(categoriaMenuDataPreprocesado, null, 2));
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
-            model: "gpt-4o-mini",
+            model: "gpt-4o",
             messages: [
                 {
                     role: 'system',
@@ -5027,7 +5018,7 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData
                     content: userPrompt
                 }
             ],
-            temperature: 0.3
+            temperature: 0.2
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -5035,11 +5026,33 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData
             }
         });
 
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        // Parsear el JSON
+        const respuestaGPT = JSON.parse(contenido);
+
+        // Calcular el totalCosto de manera precisa
+        const costoBaseTotal = respuestaGPT.costoBase.reduce((sum, costo) => sum + costo, 0);
+        console.log("Valor de costoBaseTotal:", costoBaseTotal);
+        const costoExtrasTotal = respuestaGPT.costoExtras.reduce((sum, costo) => sum + costo, 0);
+        console.log("Valor de costoExtrasTotal:", costoExtrasTotal);
+        const totalCosto = (costoBaseTotal + costoExtrasTotal).toFixed(2);
+        console.log("Valor FINAL para totalCosto:", totalCosto);
+
+        // Agregar el totalCosto a la respuesta de GPT
+        respuestaGPT.totalCosto = totalCosto;
+
         console.log("Respuesta de ChatGPT:");
         console.log("--------------------------------------");
-        console.log(response.data.choices[0].message.content);
+        console.log(respuestaGPT);
         console.log("--------------------------------------");
-        return response.data.choices[0].message.content;
+
+        return respuestaGPT;
+
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT:", error);
         throw error;
@@ -5087,7 +5100,7 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
                     content: userPrompt
                 }
             ],
-            temperature: 0.3
+            temperature: 0.2
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -5095,11 +5108,33 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
             }
         });
 
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        // Parsear el JSON
+        const respuestaGPT = JSON.parse(contenido);
+
+        // Calcular el nuevo totalCosto de manera precisa
+        const nuevoCostoBaseTotal = respuestaGPT.nuevoCostoBase.reduce((sum, costo) => sum + costo, 0);
+        console.log("Valor de nuevoCostoBaseTotal cuando se AgregaAOrden:", nuevoCostoBaseTotal);
+        const nuevoCostoExtrasTotal = respuestaGPT.nuevoCostoExtras.reduce((sum, costo) => sum + costo, 0);
+        console.log("Valor de nuevoCostoExtrasTotal cuando se AgregaAOrden:", nuevoCostoExtrasTotal);
+        const nuevoTotalCosto = (parseFloat(ordenActual.totalCosto) + nuevoCostoBaseTotal + nuevoCostoExtrasTotal).toFixed(2);
+        console.log("Valor de nuevoTotalCosto cuando se AgregaAOrden:", nuevoTotalCosto);
+
+        // Agregar el nuevo totalCosto a la respuesta de GPT
+        respuestaGPT.totalCosto = nuevoTotalCosto;
+
         console.log("Respuesta de ChatGPT para adición a orden:");
         console.log("--------------------------------------");
-        console.log(response.data.choices[0].message.content);
+        console.log(respuestaGPT);
         console.log("--------------------------------------");
-        return response.data.choices[0].message.content;
+
+        return respuestaGPT;
+
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT:", error);
         if (error.response) {
@@ -5122,6 +5157,12 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
         Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
     }));
 
+    // Convertir precios de extras a números
+    const categoriaMenuDataPreprocesado = categoriaMenuData.map(item => ({
+        ...item,
+        'Precio Extra': parseFloat(item['Precio Extra'].replace('$', '')) // Eliminar "$" y convertir a número
+    }));
+
     // Obtener los prompts desde Google Sheets
     const prompts = await getPrompts('llamadaAChatGPTParaModificarOrden');
 
@@ -5139,6 +5180,8 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
         .replace('${ordenActual.totalCosto}', ordenActual.totalCosto)
         .replace('${ordenActual.comentarios}', ordenActual.comentarios)
         .replace('${userInput}', userInput)
+        .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
+            JSON.stringify(menuPreprocesado, null, 2))
         .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
             JSON.stringify(categoriaMenuData, null, 2));
     try {
@@ -5154,7 +5197,7 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
                     content: userPrompt
                 }
             ],
-            temperature: 0.3
+            temperature: 0.2
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -5162,11 +5205,135 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
             }
         });
 
-        console.log("Respuesta de ChatGPT:");
+        // Limpiar la respuesta de marcadores markdown
+        const contenido = response.data.choices[0].message.content
+            .replace(/```json\n?/g, '')  // Elimina ```json
+            .replace(/```\n?/g, '')      // Elimina ```
+            .trim();                     // Elimina espacios en blanco extras
+
+        // Parsear el JSON
+        const respuestaGPT = JSON.parse(contenido);
+
+        console.log("Respuesta de ChatGPT (parseada):", JSON.stringify(respuestaGPT, null, 2));
+
+        // Calcular el nuevo totalCosto de manera precisa
+        let costoTotal = parseFloat(ordenActual.totalCosto);
+        console.log("Valor actual de CostoTotal (Inicia con el totalCosto de la ordenActual) -> ", costoTotal);
+
+        // Restar el costo de los elementos eliminados
+        if (respuestaGPT.elementosEliminados && respuestaGPT.elementosEliminados.length > 0) {
+            console.log("Procesando elementos eliminados...");
+            respuestaGPT.elementosEliminados.forEach(elemento => {
+                console.log("Elemento eliminado:", elemento);
+
+                // Obtener el precio base del elemento eliminado
+                const itemMenu = menuPreprocesado.find(item => item['Nombre del Platillo'] === elemento.nombre);
+                if (itemMenu) {
+                    console.log("Precio base del elemento eliminado:", itemMenu.Precio);
+                    costoTotal -= itemMenu.Precio * elemento.cantidad;
+
+                    // Restar el costo de los extras del elemento eliminado
+                    elemento.atributos.forEach(atributoCombinado => {
+                        console.log("Atributo combinado eliminado:", atributoCombinado);
+
+                        // Limpiar el atributo combinado eliminando los dos puntos
+                        const atributoLimpio = atributoCombinado.replace(':', '');
+
+                        // Separar el atributo limpio en "atributo" y "valor aceptable" usando una expresión regular
+                        const match = atributoLimpio.match(/(.+?) (.+)/);
+                        const [atributo, valorAceptable] = match ? [match[1], match[2]] : [atributoLimpio, ''];
+
+                        console.log("Asi queda el atributo y valorAceptable separados:",[atributo, valorAceptable]);
+
+                        console.log("Atributo separado:", atributo);
+                        console.log("Valor aceptable separado:", valorAceptable);
+
+                        // Buscar el atributo en categoriaMenuDataPreprocesado
+                        const categoriaAtributo = categoriaMenuDataPreprocesado.find(cat =>
+                            cat['Categoría'] === itemMenu.Categoria &&
+                            cat['Atributo'] === atributo &&
+                            cat['Valor Aceptable'] === valorAceptable
+                        );
+
+                        if (categoriaAtributo) {
+                            const precioExtra = categoriaAtributo['Precio Extra'];
+                            console.log("Precio extra del atributo eliminado:", precioExtra);
+                            costoTotal -= precioExtra * elemento.cantidad;
+                        } else {
+                            console.log("Atributo no encontrado en categoriaMenuData:", atributoCombinado);
+                        }
+                    });
+                } else {
+                    console.log("Elemento no encontrado en el menú:", elemento.nombre);
+                }
+            });
+        } else {
+            console.log("No hay elementos eliminados.");
+        }
+
+        // Sumar el costo de los elementos agregados
+        if (respuestaGPT.elementosAgregados && respuestaGPT.elementosAgregados.length > 0) {
+            console.log("Procesando elementos agregados...");
+            respuestaGPT.elementosAgregados.forEach(elemento => {
+                console.log("Elemento agregado:", elemento);
+
+                // Obtener el precio base del elemento agregado
+                const itemMenu = menuPreprocesado.find(item => item['Nombre del Platillo'] === elemento.nombre);
+                if (itemMenu) {
+                    console.log("Precio base del elemento agregado:", itemMenu.Precio);
+                    costoTotal += itemMenu.Precio * elemento.cantidad;
+
+                    // Sumar el costo de los extras del elemento agregado
+                    elemento.atributos.forEach(atributoCombinado => {
+                        console.log("Atributo combinado agregado:", atributoCombinado);
+
+                        // Limpiar el atributo combinado eliminando los dos puntos
+                        const atributoLimpio = atributoCombinado.replace(':', '');
+
+                        // Separar el atributo limpio en "atributo" y "valor aceptable" usando una expresión regular
+                        const match = atributoLimpio.match(/(.+?) (.+)/);
+                        const [atributo, valorAceptable] = match ? [match[1], match[2]] : [atributoLimpio, ''];
+
+                        console.log("Asi queda el atributo y valorAceptable separados:",[atributo, valorAceptable]);
+
+                        console.log("Atributo separado:", atributo);
+                        console.log("Valor aceptable separado:", valorAceptable);
+
+                        // Buscar el atributo en categoriaMenuDataPreprocesado
+                        const categoriaAtributo = categoriaMenuDataPreprocesado.find(cat =>
+                            cat['Categoría'] === itemMenu.Categoria &&
+                            cat['Atributo'] === atributo &&
+                            cat['Valor Aceptable'] === valorAceptable
+                        );
+
+                        if (categoriaAtributo) {
+                            const precioExtra = categoriaAtributo['Precio Extra'];
+                            console.log("Precio extra del atributo agregado:", precioExtra);
+                            costoTotal += precioExtra * elemento.cantidad;
+                        } else {
+                            console.log("Atributo no encontrado en categoriaMenuData:", atributoCombinado);
+                        }
+                    });
+                } else {
+                    console.log("Elemento no encontrado en el menú:", elemento.nombre);
+                }
+            });
+        } else {
+            console.log("No hay elementos agregados.");
+        }
+
+        console.log("/-/-/ Costo total final:", costoTotal);
+
+        // Agregar el nuevo totalCosto a la respuesta de GPT
+        respuestaGPT.totalCosto = costoTotal.toFixed(2);
+
+        console.log("Respuesta a usar para modificar la orden:");
         console.log("--------------------------------------");
-        console.log(response.data.choices[0].message.content);
+        console.log(respuestaGPT);
         console.log("--------------------------------------");
-        return response.data.choices[0].message.content;
+
+        return respuestaGPT;
+
     } catch (error) {
         console.error("Error al llamar a la API de ChatGPT:", error);
         throw error;
@@ -5542,7 +5709,7 @@ async function analizarCategoriaYAtributos(userInput, menuData, categoriaMenuDat
     // Obtener los prompts desde Google Sheets
     const prompts = await getPrompts('analizarCategoriaYAtributos');
 
-    /*
+
     const systemPrompt = prompts.systemPrompt
         .replace('${JSON.stringify(menuData, null, 2)}',
             JSON.stringify(menuData, null, 2))
@@ -5550,41 +5717,6 @@ async function analizarCategoriaYAtributos(userInput, menuData, categoriaMenuDat
             JSON.stringify(categoriaMenuData, null, 2));
 
     const userPrompt = prompts.userPrompt.replace('${userInput}', userInput);
-    */
-
-    const systemPrompt = `
-Eres un asistente especializado en analizar pedidos de restaurante.
-
-Tienes acceso al siguiente menú:
-${JSON.stringify(menuData, null, 2)}
-
-Y a la siguiente información de categorías y atributos:
-${JSON.stringify(categoriaMenuData, null, 2)}
-
-Tu tarea es analizar el pedido e identificar cada elemento individual, incluyendo cantidades.
-`;
-
-    const userPrompt = `
-Analiza el siguiente pedido:
-"${userInput}"
-
-Responde con un JSON que contenga:
-{
-    "elementos": [
-        {
-            "nombre": "nombre del item del menú",
-            "cantidad": número de unidades ordenadas,
-            "categoria": "categoría del item",
-            "atributos": [
-                {
-                    "nombre": "nombre del atributo",
-                    "valoresAceptables": "valor1, valor2, valor3",
-                    "mensajeSolicitud": "¿[Pregunta personalizada]? Las opciones son: [valores aceptables]"
-                }
-            ]
-        }
-    ]
-}`;
 
     try {
         const response = await axios.post(OPENAI_API_URL, {
@@ -5599,7 +5731,7 @@ Responde con un JSON que contenga:
                     content: userPrompt
                 }
             ],
-            temperature: 0.3
+            temperature: 0.2
         }, {
             headers: {
                 'Authorization': `Bearer ${OPENAI_API_KEY}`,
