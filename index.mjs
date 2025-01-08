@@ -3084,20 +3084,47 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
     sessionAttributes.totalFINAL = totalAPagar;
 
     console.log("---Comenzando a crear el resumen---");
+
+    // Formatear la lista de elementos de la orden
+    const formatearOrden = (orden) => {
+        return orden
+            .split(', ') // Separar por comas
+            .map((item, index) => `${index + 1}. ${item.trim()}\n`) // Enumerar, limpiar espacios y agregar salto de línea
+            .join(''); // Unir sin espacios adicionales
+    };
+    
     // Crear mensaje de resumen
     const mensajeResumen = `
-    Tu orden es la #${sessionAttributes.numeroOrden} \n
-    
-    • Nombre de quien recibe: ${sessionAttributes.nombreCliente} \n
-    • Número de Teléfono: ${sessionAttributes.telefonoCliente} \n
-    • Entrega: ${sessionAttributes.direccionEntrega} \n
-    • Orden: ${sessionAttributes.orden} \n
-    • Comentarios: ${sessionAttributes.comentariosOrden || 'Sin comentarios'} \n
-    • Método de pago: ${sessionAttributes.metodoPago} \n\n
-    • Total parcial: $${sessionAttributes.totalCosto}\n
-    • Costo de Envío: ${sessionAttributes.costoEnvio}\n\n
-    • Total a Pagar: $${sessionAttributes.totalFINAL}\n\n
-    `;
+------------------------------------------
+          RESUMEN DE TU ORDEN #${sessionAttributes.numeroOrden}
+------------------------------------------
+
+• Nombre de quien recibe: ${sessionAttributes.nombreCliente}
+• Número de Teléfono: ${sessionAttributes.telefonoCliente}
+• Dirección de Entrega: ${sessionAttributes.direccionEntrega}
+
+------------------------------------------
+              DETALLES DE LA ORDEN
+------------------------------------------
+${formatearOrden(sessionAttributes.orden)}
+
+------------------------------------------
+              INFORMACIÓN ADICIONAL
+------------------------------------------
+• Comentarios: ${sessionAttributes.comentariosOrden || 'Sin comentarios'}
+• Método de Pago: ${sessionAttributes.metodoPago}
+
+------------------------------------------
+                TOTALES
+------------------------------------------
+• Total Parcial: $${sessionAttributes.totalCosto}
+• Costo de Envío: $${sessionAttributes.costoEnvio}
+• Total a Pagar: $${sessionAttributes.totalFINAL}
+
+------------------------------------------
+¡Gracias por tu compra! 🛒 🌟
+------------------------------------------
+`;
 
     console.log("---Resumen Creado---");
 
@@ -5243,7 +5270,7 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
                         const match = atributoLimpio.match(/(.+?) (.+)/);
                         const [atributo, valorAceptable] = match ? [match[1], match[2]] : [atributoLimpio, ''];
 
-                        console.log("Asi queda el atributo y valorAceptable separados:",[atributo, valorAceptable]);
+                        console.log("Asi queda el atributo y valorAceptable separados:", [atributo, valorAceptable]);
 
                         console.log("Atributo separado:", atributo);
                         console.log("Valor aceptable separado:", valorAceptable);
@@ -5294,7 +5321,7 @@ async function llamadaAChatGPTParaModificarOrden(userInput, ordenActual, menuDat
                         const match = atributoLimpio.match(/(.+?) (.+)/);
                         const [atributo, valorAceptable] = match ? [match[1], match[2]] : [atributoLimpio, ''];
 
-                        console.log("Asi queda el atributo y valorAceptable separados:",[atributo, valorAceptable]);
+                        console.log("Asi queda el atributo y valorAceptable separados:", [atributo, valorAceptable]);
 
                         console.log("Atributo separado:", atributo);
                         console.log("Valor aceptable separado:", valorAceptable);
