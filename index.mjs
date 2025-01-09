@@ -3092,7 +3092,7 @@ async function handleFinalizarOrdenIntent(event, sessionAttributes, intentInfo) 
             .map((item, index) => `${index + 1}. ${item.trim()}\n`) // Enumerar, limpiar espacios y agregar salto de línea
             .join(''); // Unir sin espacios adicionales
     };
-    
+
     // Crear mensaje de resumen
     const mensajeResumen = `
 ------------------------------------------
@@ -5062,16 +5062,66 @@ async function llamadaAChatGPTParaOrdenar(userInput, menuData, categoriaMenuData
         // Parsear el JSON
         const respuestaGPT = JSON.parse(contenido);
 
-        // Calcular el totalCosto de manera precisa
-        const costoBaseTotal = respuestaGPT.costoBase.reduce((sum, costo) => sum + costo, 0);
-        console.log("Valor de costoBaseTotal:", costoBaseTotal);
-        const costoExtrasTotal = respuestaGPT.costoExtras.reduce((sum, costo) => sum + costo, 0);
-        console.log("Valor de costoExtrasTotal:", costoExtrasTotal);
-        const totalCosto = (costoBaseTotal + costoExtrasTotal).toFixed(2);
-        console.log("Valor FINAL para totalCosto:", totalCosto);
+        console.log("Respuesta de ChatGPT (parseada):", JSON.stringify(respuestaGPT, null, 2));
+
+        // Calcular el costo total de manera precisa
+        let costoTotal = 0;
+        console.log("Iniciando cálculo del costo total. Valor inicial de costoTotal:", costoTotal);
+
+        // Procesar cada elemento ordenado para calcular el costo
+        for (const elemento of respuestaGPT.elementosOrdenados) {
+            const { nombre, cantidad, atributos } = elemento;
+            console.log("\nProcesando elemento ordenado:", nombre);
+            console.log("Cantidad:", cantidad);
+            console.log("Atributos:", atributos);
+
+            // Buscar el elemento en el menú
+            const itemMenu = menuPreprocesado.find(item => item['Nombre del Platillo'] === nombre);
+            if (itemMenu) {
+                console.log("Elemento encontrado en el menú:", itemMenu);
+
+                // Sumar el costo base
+                const costoBase = itemMenu.Precio * cantidad;
+                console.log("Costo base del elemento:", costoBase);
+                costoTotal += costoBase;
+                console.log("Costo total acumulado después de agregar costo base:", costoTotal);
+
+                // Sumar el costo de los extras
+                for (const atributo of atributos) {
+                    console.log("\nProcesando atributo:", atributo);
+
+                    // Extraer el nombre del atributo y el valor aceptable
+                    const nombreAtributo = atributo.split(' ')[0];
+                    const valorAceptable = atributo.split(' ').slice(1).join(' ');
+                    console.log("Nombre del atributo:", nombreAtributo);
+                    console.log("Valor aceptable:", valorAceptable);
+
+                    // Buscar el atributo en categoriaMenuDataPreprocesado
+                    const categoriaAtributo = categoriaMenuDataPreprocesado.find(cat =>
+                        cat['Categoría'] === itemMenu.Categoria &&
+                        cat['Atributo'] === nombreAtributo &&
+                        cat['Valor Aceptable'] === valorAceptable
+                    );
+
+                    if (categoriaAtributo) {
+                        const costoExtra = categoriaAtributo['Precio Extra'] * cantidad;
+                        console.log("Costo extra del atributo:", costoExtra);
+                        costoTotal += costoExtra;
+                        console.log("Costo total acumulado después de agregar costo extra:", costoTotal);
+                    } else {
+                        console.log("Atributo no encontrado en categoriaMenuDataPreprocesado:", atributo);
+                    }
+                }
+            } else {
+                console.log("Elemento NO encontrado en el menú:", nombre);
+            }
+        }
+
+        console.log("\nCálculo del costo total finalizado. Valor final de costoTotal:", costoTotal);
 
         // Agregar el totalCosto a la respuesta de GPT
-        respuestaGPT.totalCosto = totalCosto;
+        respuestaGPT.totalCosto = costoTotal.toFixed(2);
+        console.log("Total costo agregado a la respuesta de GPT:", respuestaGPT.totalCosto);
 
         console.log("Respuesta de ChatGPT:");
         console.log("--------------------------------------");
@@ -5094,6 +5144,13 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
         Precio: parseFloat(item.Precio.replace('$', '')) // Eliminar "$" y convertir a número
     }));
 
+    // Convertir precios de extras a números
+    const categoriaMenuDataPreprocesado = categoriaMenuData.map(item => ({
+        ...item,
+        'Precio Extra': parseFloat(item['Precio Extra'].replace('$', '')) // Eliminar "$" y convertir a número
+    }));
+
+
     // Obtener los prompts desde Google Sheets
     const prompts = await getPrompts('llamadaAChatGPTParaAgregarAOrden');
 
@@ -5102,7 +5159,7 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
         .replace('${JSON.stringify(menuPreprocesado, null, 2)}',
             JSON.stringify(menuPreprocesado, null, 2))
         .replace('${JSON.stringify(categoriaMenuData, null, 2)}',
-            JSON.stringify(categoriaMenuData, null, 2));
+            JSON.stringify(categoriaMenuDataPreprocesado, null, 2));
 
     // Reemplazar variables en el user prompt
     const userPrompt = prompts.userPrompt
@@ -5144,16 +5201,66 @@ async function llamadaAChatGPTParaAgregarAOrden(userInput, ordenActual, menuData
         // Parsear el JSON
         const respuestaGPT = JSON.parse(contenido);
 
-        // Calcular el nuevo totalCosto de manera precisa
-        const nuevoCostoBaseTotal = respuestaGPT.nuevoCostoBase.reduce((sum, costo) => sum + costo, 0);
-        console.log("Valor de nuevoCostoBaseTotal cuando se AgregaAOrden:", nuevoCostoBaseTotal);
-        const nuevoCostoExtrasTotal = respuestaGPT.nuevoCostoExtras.reduce((sum, costo) => sum + costo, 0);
-        console.log("Valor de nuevoCostoExtrasTotal cuando se AgregaAOrden:", nuevoCostoExtrasTotal);
-        const nuevoTotalCosto = (parseFloat(ordenActual.totalCosto) + nuevoCostoBaseTotal + nuevoCostoExtrasTotal).toFixed(2);
-        console.log("Valor de nuevoTotalCosto cuando se AgregaAOrden:", nuevoTotalCosto);
+        console.log("Respuesta de ChatGPT (parseada):", JSON.stringify(respuestaGPT, null, 2));
 
-        // Agregar el nuevo totalCosto a la respuesta de GPT
-        respuestaGPT.totalCosto = nuevoTotalCosto;
+        // Calcular el nuevo costo total de manera precisa
+        let costoTotal = parseFloat(ordenActual.totalCosto);
+        console.log("Iniciando cálculo del costo total. Valor inicial de costoTotal:", costoTotal);
+
+        // Procesar cada elemento agregado para calcular el costo
+        for (const elemento of respuestaGPT.elementosAgregados) {
+            const { nombre, cantidad, atributos } = elemento;
+            console.log("\nProcesando elemento agregado:", nombre);
+            console.log("Cantidad:", cantidad);
+            console.log("Atributos:", atributos);
+
+            // Buscar el elemento en el menú
+            const itemMenu = menuPreprocesado.find(item => item['Nombre del Platillo'] === nombre);
+            if (itemMenu) {
+                console.log("Elemento encontrado en el menú:", itemMenu);
+
+                // Sumar el costo base
+                const costoBase = itemMenu.Precio * cantidad;
+                console.log("Costo base del elemento:", costoBase);
+                costoTotal += costoBase;
+                console.log("Costo total acumulado después de agregar costo base:", costoTotal);
+
+                // Sumar el costo de los extras
+                for (const atributo of atributos) {
+                    console.log("\nProcesando atributo:", atributo);
+
+                    // Extraer el nombre del atributo y el valor aceptable
+                    const nombreAtributo = atributo.split(' ')[0];
+                    const valorAceptable = atributo.split(' ').slice(1).join(' ');
+                    console.log("Nombre del atributo:", nombreAtributo);
+                    console.log("Valor aceptable:", valorAceptable);
+
+                    // Buscar el atributo en categoriaMenuDataPreprocesado
+                    const categoriaAtributo = categoriaMenuDataPreprocesado.find(cat =>
+                        cat['Categoría'] === itemMenu.Categoria &&
+                        cat['Atributo'] === nombreAtributo &&
+                        cat['Valor Aceptable'] === valorAceptable
+                    );
+
+                    if (categoriaAtributo) {
+                        const costoExtra = categoriaAtributo['Precio Extra'] * cantidad;
+                        console.log("Costo extra del atributo:", costoExtra);
+                        costoTotal += costoExtra;
+                        console.log("Costo total acumulado después de agregar costo extra:", costoTotal);
+                    } else {
+                        console.log("Atributo no encontrado en categoriaMenuDataPreprocesado:", atributo);
+                    }
+                }
+            } else {
+                console.log("Elemento NO encontrado en el menú:", nombre);
+            }
+        }
+
+        console.log("\nCálculo del costo total finalizado. Valor final de costoTotal:", costoTotal);
+
+        // Agregar el totalCosto a la respuesta de GPT
+        respuestaGPT.totalCosto = costoTotal.toFixed(2);
+        console.log("Total costo agregado a la respuesta de GPT:", respuestaGPT.totalCosto);
 
         console.log("Respuesta de ChatGPT para adición a orden:");
         console.log("--------------------------------------");
