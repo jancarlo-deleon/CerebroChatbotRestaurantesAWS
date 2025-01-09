@@ -3833,12 +3833,23 @@ async function handleConsultaCategoriaMenuIntent(event, sessionAttributes) {
         const categoriaCheck = await verificarSiEsCategoria(userInput);
         console.log('[-] Resultado verificación de categoría:', categoriaCheck);
 
+        // Llamar a la función para interpretar la categoría
+        const interpretacionCategoria = await interpretarCategoriaMenu(categoriaCheck.categoria, menuData,userInput);
+
+        if (!interpretacionCategoria) {
+            return null;
+        }
+
         // Si es una nueva consulta de categoría
         if (categoriaCheck.esCategoria) {
             console.log('[-] Procesando nueva consulta de categoría:', categoriaCheck.categoria);
 
-            const opcionesMenu = await obtenerOpcionesPorCategoria(categoriaCheck.categoria, menuData);
+            const opcionesMenu = await obtenerOpcionesPorCategoria(categoriaCheck.categoria, menuData,interpretacionCategoria);
+            console.log("[-] Valor de opcionesMenu:",interpretacionCategoria);
             console.log('[-] Opciones de menú encontradas:', opcionesMenu ? 'OK' : 'No encontradas');
+            console.log("[-] Valor de categoriaPlatillo:", interpretacionCategoria.categoriaPlatillo);
+            console.log("[-] Valor de categoriaMenuData:" , interpretacionCategoria.categoriaMenuData);
+            console.log("[-] Valor de matchedItems:", interpretacionCategoria.matchedItems);
 
             if (!opcionesMenu) {
                 return {
@@ -3854,14 +3865,14 @@ async function handleConsultaCategoriaMenuIntent(event, sessionAttributes) {
                     messages: [
                         {
                             contentType: "PlainText",
-                            content: `Lo siento, no encontré opciones de ${categoriaCheck.categoria} en nuestro menú.`
+                            content: `Lo siento, non manejamos estas opciones en nuestro menú.`
                         }
                     ]
                 };
             }
 
             // Guardar la categoría en la sesión
-            sessionAttributes.categoriaPrevia = categoriaCheck.categoria;
+            sessionAttributes.categoriaPrevia = interpretacionCategoria.categoriaPlatillo;
             console.log('[-] Categoría guardada en sesión:', sessionAttributes.categoriaPrevia);
 
             return {
@@ -4389,7 +4400,9 @@ async function handleConectarAAgenteIntent(event, sessionAttributes, userInput) 
 }
 
 //Verificar si las solicitudes son generales o especificas
-async function obtenerOpcionesPorCategoria(categoria, menuData) {
+async function obtenerOpcionesPorCategoria(categoria, menuData,interpretacionCategoria) {
+
+    console.log("Contenido de interpreTacionCategoria:", interpretacionCategoria);
 
     // Verificar si menuData está definido y es un array
     if (!menuData || !Array.isArray(menuData)) {
@@ -4401,17 +4414,22 @@ async function obtenerOpcionesPorCategoria(categoria, menuData) {
 
     try {
 
-        // Llamar a la función para interpretar la categoría
-        const jsonResponse = await interpretarCategoriaMenu(categoria, menuData);
-
-        if (!jsonResponse) {
-            return null;
-        }
-
         // Filtrar el menú basado en los items coincidentes
-        const opciones = menuData.filter(item =>
-            item['Nombre del Platillo'].toLowerCase().includes(jsonResponse.categoriaPlatillo.toLowerCase())
-        );
+        let opciones;
+
+        if (interpretacionCategoria.categoriaMenuData) {
+            console.log("Se buscara por categoriaMenuData");
+            // Si hay una categoría en menuData, filtrar por esa categoría
+            opciones = menuData.filter(item =>
+                item['Categoria'].toLowerCase() === interpretacionCategoria.categoriaMenuData.toLowerCase()
+            );
+        } else {
+            console.log("Se buscara por categoriaPlatillo");
+            // Si no hay una categoría en menuData, filtrar por el nombre del platillo
+            opciones = menuData.filter(item =>
+                item['Nombre del Platillo'].toLowerCase().includes(interpretacionCategoria.categoriaPlatillo.toLowerCase())
+            );
+        }
 
         if (opciones.length === 0) {
             return null;
@@ -5728,7 +5746,7 @@ async function verificarSiEsCategoria(userInput) {
     }
 }
 
-async function interpretarCategoriaMenu(categoria, menuData) {
+async function interpretarCategoriaMenu(categoria, menuData,userInput) {
 
     // Obtener los prompts desde Google Sheets
     const prompts = await getPrompts('interpretarCategoriaMenu');
@@ -5737,6 +5755,7 @@ async function interpretarCategoriaMenu(categoria, menuData) {
 
     // Reemplazar variables en el user prompt
     const userPrompt = prompts.userPrompt
+        .replace('${userInput}', userInput)
         .replace('${categoria}', categoria)
         .replace('${JSON.stringify(menuData, null, 2)}', JSON.stringify(menuData, null, 2));
 
@@ -5761,10 +5780,6 @@ async function interpretarCategoriaMenu(categoria, menuData) {
             }
         });
 
-        console.log("---Valor de la respuesta para interpretar_categoria_menu apoyandose de ChatGPT ---");
-        console.log(response.data.choices[0].message.content);
-        console.log("------------------------------------------------------------------------------------");
-
         const responseContent = response.data.choices[0].message.content.trim();
 
         // Asegurarse de que solo estamos parseando el JSON
@@ -5777,7 +5792,10 @@ async function interpretarCategoriaMenu(categoria, menuData) {
             throw new Error("No se pudo extraer JSON válido de la respuesta");
         }
 
-        console.log("Valor de jsonResponse para interpretar CategoriaMenu: ", jsonResponse);
+        console.log("---Valor de la respuesta para interpretar_categoria_menu apoyandose de ChatGPT ---");
+        console.log(jsonResponse);
+        console.log("------------------------------------------------------------------------------------");
+
 
         return jsonResponse;
 
